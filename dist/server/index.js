@@ -2339,12 +2339,13 @@ async function connectDatabase() {
   if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
   }
-  if (dbConnectionPromise) {
+  if (mongoose.connection.readyState === 2 && dbConnectionPromise) {
     try {
       await dbConnectionPromise;
     } catch (_) {}
     return mongoose.connection;
   }
+  dbConnectionPromise = null;
 
   const configuredUri = process.env.MONGODB_URI;
 
