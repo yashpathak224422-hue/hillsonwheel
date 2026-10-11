@@ -1021,6 +1021,21 @@ app.get('/api/diagnostics/db', async (req, res) => {
   }
 });
 
+app.get('/api/diagnostics/send-test-email', async (req, res) => {
+  const targetEmail = req.query.to || process.env.SMTP_USER || 'howsmailbox@gmail.com';
+  try {
+    const success = await sendEmail({
+      to: targetEmail,
+      subject: 'HILLSONWHEELS Live Cloud Delivery Verification',
+      text: 'Delivery verification test from HILLSONWHEELS backend to confirmed recipient inbox.',
+      html: '<p>This is a test confirming that live cloud notifications and OTP delivery are working directly from hosting.</p>'
+    });
+    res.json({ success, recipient: targetEmail, timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Security audit endpoint (protected)
 app.get('/api/admin/security-audit', requireUser, (req, res) => {
   // In production, this should be restricted to admin users only
