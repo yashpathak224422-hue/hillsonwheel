@@ -854,10 +854,23 @@ async function optionalUser(req, res, next) {
 /* ==========================================================================
    HEALTH, CATALOG & AUTH ENDPOINTS
    ========================================================================== */
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let dbError = null;
+  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+        maxPoolSize: 5
+      });
+    } catch (err) {
+      dbError = err.message;
+    }
+  }
   res.json({ 
     status: 'ok', 
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    dbError,
+    memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     timestamp: new Date().toISOString()
   });
 });
