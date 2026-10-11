@@ -1858,7 +1858,7 @@ async function connectDatabase() {
     try {
       dbConnectionPromise = mongoose.connect(configuredUri, {
         serverSelectionTimeoutMS: 10000,
-        maxPoolSize: 10,
+        maxPoolSize: 5,
         minPoolSize: 1,
         maxIdleTimeMS: 30000,
         socketTimeoutMS: 45000
@@ -1872,11 +1872,21 @@ async function connectDatabase() {
     }
   }
 
-  // Fallback for local development only
+  // Never run MongoMemoryServer in production!
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('Production mode: In-memory MongoDB disabled to conserve memory.');
+    return null;
+  }
+
+  // Fallback for offline local development only
   try {
     console.warn('Using local development in-memory MongoDB fallback...');
     if (!MongoMemoryServer) {
-      MongoMemoryServer = require('mongodb-memory-server').MongoMemoryServer;
+      try {
+        MongoMemoryServer = require('mongodb-memory-server').MongoMemoryServer;
+      } catch (_) {
+        return null;
+      }
     }
     const mongoMemoryServer = await MongoMemoryServer.create({
       binary: { version: '7.0.14' },
@@ -1884,7 +1894,7 @@ async function connectDatabase() {
     });
     const memoryUri = mongoMemoryServer.getUri();
     await mongoose.connect(memoryUri, {
-      maxPoolSize: 5,
+      maxPoolSize: 2,
       minPoolSize: 1
     });
     console.log(`MongoDB memory server connected at ${memoryUri}`);
