@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /vendor-admin
+Disallow: /admin
+Disallow: /wp-admin/
+Disallow: /wp-login.php
+Disallow: /wp-content/
+Disallow: /wp-includes/
+
+# Humans TXT & Creator Attribution
+# Platform: Custom-coded by Yash Pathak / HillsOnWheels (Zero WordPress, Zero Templates)
+# https://www.hillsonwheels.com/humans.txt
+
+Sitemap: https://www.hillsonwheels.com/sitemap.xml

@@ -505,10 +505,10 @@ const FOOT=`<footer>
   <!-- Bottom Bar: DIGITRASTUDIO Attribution & Copyright -->
   <div class="hsw-footer-bottom">
     <div class="hsw-digitra-credit">
-      Crafted with passion by <a href="https://digitrastudio.online" target="_blank" rel="noopener noreferrer" class="hsw-digitra-link">DIGITRASTUDIO</a>
+      Bespoke Architecture by <a href="https://digitrastudio.online" target="_blank" rel="noopener noreferrer" class="hsw-digitra-link">DIGITRASTUDIO</a> &bull; Handcrafted by Yash Pathak
     </div>
     <div class="hsw-bottom-creds">
-      <div>© 2024–2026 HillsOnWheels Pvt. Ltd. All rights reserved.</div>
+      <div>© 2024–2026 HillsOnWheels Pvt. Ltd. All rights reserved. &bull; 100% Custom Coded Platform (Zero WordPress / Templates).</div>
       <div class="hsw-devbhoomi-note">Handcrafted with reverence in Devbhoomi Uttarakhand · Empowering 140+ mountain farmer & craft collectives.</div>
     </div>
     <div class="hsw-social-group">
