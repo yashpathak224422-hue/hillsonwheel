@@ -1,6 +1,8 @@
 require('dotenv').config();
-
-const path = require('path');
+const dns = require('dns');
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 const crypto = require('crypto');
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -949,6 +951,7 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
   try {
     const t1 = nodemailer.createTransport({
       service: 'gmail',
+      family: 4,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
       connectionTimeout: 6000
     });
@@ -962,6 +965,7 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
+      family: 4,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
       connectionTimeout: 6000
     });
@@ -975,6 +979,7 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
+      family: 4,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
       connectionTimeout: 6000
     });

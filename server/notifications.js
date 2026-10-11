@@ -1,4 +1,8 @@
 'use strict';
+const dns = require('dns');
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 const nodemailer = require('nodemailer');
 
 /* ==========================================================================
@@ -17,14 +21,20 @@ function createTransport() {
 
   if (isGmail) {
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      family: 4,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASSWORD
       },
       connectionTimeout: 8000,
       greetingTimeout: 8000,
-      socketTimeout: 8000
+      socketTimeout: 8000,
+      tls: {
+        rejectUnauthorized: false
+      }
     });
   }
 
@@ -35,6 +45,7 @@ function createTransport() {
     host,
     port,
     secure: isSecure,
+    family: 4,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD
