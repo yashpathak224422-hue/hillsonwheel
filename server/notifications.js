@@ -15,44 +15,27 @@ function hasSmtpConfig() {
   return Boolean(host && user && pass);
 }
 
+function ipv4Lookup(hostname, options, callback) {
+  dns.lookup(hostname, { family: 4 }, callback);
+}
+
 function createTransport() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const isGmail = host === 'smtp.gmail.com' || (process.env.SMTP_USER && process.env.SMTP_USER.includes('@gmail.com'));
-
-  if (isGmail) {
-    return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      family: 4,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD
-      },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 8000,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-  }
-
-  const port = Number(process.env.SMTP_PORT || 587);
+  const port = Number(process.env.SMTP_PORT || (host === 'smtp.gmail.com' ? 465 : 587));
   const isSecure = process.env.SMTP_SECURE === 'true' || port === 465;
 
   return nodemailer.createTransport({
     host,
     port,
     secure: isSecure,
-    family: 4,
+    lookup: ipv4Lookup,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD
     },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 8000,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
     tls: {
       rejectUnauthorized: false
     }
@@ -113,7 +96,38 @@ async function sendEmail({ to, subject, html, text, attachments }) {
     }
   }
 
-  // 3. SMTP with fast 1.5-second timeout race
+  // 3. Reliable HTTPS delivery via Mail Relay (bypasses cloud host outbound SMTP port restrictions)
+  const relaySecret = process.env.JWT_SECRET || 'DCIgcYdtHg5Rt-sGlM2Xo3W6gXZG9_GLx0AzEX5LIXgW3Cwky6VI-MZRitWa_oi7';
+  const relayCandidates = [
+    process.env.MAIL_RELAY_URL,
+    'https://www.hillsonwheels.com/mail-dispatch',
+    'https://hillsonwheels.vercel.app/mail-dispatch',
+    'https://www.hillsonwheels.com/api/mail-relay',
+    'https://hillsonwheels.vercel.app/api/mail-relay'
+  ].filter(Boolean);
+
+  for (const relayUrl of relayCandidates) {
+    try {
+      const relayRes = await fetch(relayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${relaySecret}`
+        },
+        body: JSON.stringify({ to, subject, html, text, attachments }),
+        signal: AbortSignal.timeout(6000)
+      });
+      if (relayRes.ok) {
+        const relayData = await relayRes.json();
+        console.log(`[MAIL RELAY SUCCESS] Email delivered to ${to} via ${relayUrl} (MessageId: ${relayData.messageId})`);
+        return true;
+      }
+    } catch (relayErr) {
+      console.warn(`[MAIL RELAY ATTEMPT] ${relayUrl}:`, relayErr.message);
+    }
+  }
+
+  // 4. SMTP with fast timeout fallback (for local development or direct server hosting)
   if (!hasSmtpConfig()) {
     console.warn('[SMTP WARNING] SMTP credentials not set or incomplete.');
     return false;

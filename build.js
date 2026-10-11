@@ -1,12 +1,15 @@
 const fs = require('fs');
 const path = require('path');
-const { minify } = require('terser');
+let minify = null;
+try { ({ minify } = require('terser')); } catch (_) {}
 let JavaScriptObfuscator = null;
 try {
   JavaScriptObfuscator = require('javascript-obfuscator');
 } catch (_) {}
-const { minify: htmlMinify } = require('html-minifier-terser');
-const CleanCSS = require('clean-css');
+let htmlMinify = null;
+try { ({ minify: htmlMinify } = require('html-minifier-terser')); } catch (_) {}
+let CleanCSS = null;
+try { CleanCSS = require('clean-css'); } catch (_) {}
 
 const isProduction = process.argv.includes('--production');
 
@@ -54,26 +57,36 @@ function copyDirectory(src, dest) {
 // Minify HTML
 async function minifyHTML(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
-  const result = await htmlMinify(content, {
-    removeComments: true,
-    collapseWhitespace: true,
-    minifyCSS: true,
-    minifyJS: true,
-    removeAttributeQuotes: false,
-    removeRedundantAttributes: true,
-    removeScriptTypeAttributes: true,
-    removeStyleLinkTypeAttributes: true,
-    useShortDoctype: true,
-    keepClosingSlash: true
-  });
-  return result;
+  if (!htmlMinify) return content;
+  try {
+    const result = await htmlMinify(content, {
+      removeComments: true,
+      collapseWhitespace: true,
+      minifyCSS: true,
+      minifyJS: true,
+      removeAttributeQuotes: false,
+      removeRedundantAttributes: true,
+      removeScriptTypeAttributes: true,
+      removeStyleLinkTypeAttributes: true,
+      useShortDoctype: true,
+      keepClosingSlash: true
+    });
+    return result;
+  } catch (_) {
+    return content;
+  }
 }
 
 // Minify CSS
 function minifyCSS(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
-  const result = new CleanCSS().minify(content);
-  return result.styles;
+  if (!CleanCSS) return content;
+  try {
+    const result = new CleanCSS().minify(content);
+    return result.styles || content;
+  } catch (_) {
+    return content;
+  }
 }
 
 // Obfuscate JavaScript
@@ -111,17 +124,23 @@ async function obfuscateJS(filePath) {
       unicodeEscapeSequence: false
     });
     return obfuscationResult.getObfuscatedCode();
-  } else {
+  } else if (minify) {
     // Development: Just minify
-    const result = await minify(content, {
-      compress: true,
-      mangle: true,
-      toplevel: true,
-      format: {
-        comments: false
-      }
-    });
-    return result.code;
+    try {
+      const result = await minify(content, {
+        compress: true,
+        mangle: true,
+        toplevel: true,
+        format: {
+          comments: false
+        }
+      });
+      return result.code || content;
+    } catch (_) {
+      return content;
+    }
+  } else {
+    return content;
   }
 }
 
@@ -135,7 +154,7 @@ async function build() {
     const srcPath = path.join(SOURCE_DIR, file.name);
     const destPath = path.join(DIST_DIR, file.name);
     
-    if (file.isDirectory() && file.name !== 'dist' && file.name !== 'node_modules' && file.name !== '.git' && file.name !== '.nodeenv' && file.name !== '.gemini' && file.name !== 'scratch' && file.name !== '.vercel' && file.name !== '.tempmediaStorage' && file.name !== 'api') {
+    if (file.isDirectory() && file.name !== 'dist' && file.name !== 'node_modules' && file.name !== '.git' && file.name !== '.nodeenv' && file.name !== '.gemini' && file.name !== 'scratch' && file.name !== '.vercel' && file.name !== '.tempmediaStorage') {
       copyDirectory(srcPath, destPath);
     } else if (file.isFile() && !HTML_FILES.includes(file.name) && !file.name.endsWith('.js') && !file.name.endsWith('.css') && file.name !== 'build.js' && file.name !== 'package.json' && file.name !== 'package-lock.json') {
       fs.copyFileSync(srcPath, destPath);

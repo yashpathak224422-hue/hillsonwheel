@@ -1,5 +1,14 @@
 require('dotenv').config();
-
+const dns = require('dns');
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
+process.on('unhandledRejection', (reason) => {
+  console.warn('[UNHANDLED REJECTION]', reason && reason.message ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.message);
+});
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
@@ -938,6 +947,80 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+app.get('/api/diagnostics/smtp', async (req, res) => {
+  const nodemailer = require('nodemailer');
+  const results = {
+    smtpUser: process.env.SMTP_USER || null,
+    hasPassword: Boolean(process.env.SMTP_PASSWORD),
+    configuredHost: process.env.SMTP_HOST || null,
+    configuredPort: process.env.SMTP_PORT || null
+  };
+  const ipv4Lookup = (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback);
+
+  // Check Mail Relay endpoint over HTTPS
+  try {
+    const relaySecret = process.env.JWT_SECRET || 'DCIgcYdtHg5Rt-sGlM2Xo3W6gXZG9_GLx0AzEX5LIXgW3Cwky6VI-MZRitWa_oi7';
+    const relayRes = await fetch('https://www.hillsonwheels.com/mail-dispatch', {
+      signal: AbortSignal.timeout(5000)
+    });
+    results.mailRelay = relayRes.ok ? 'REACHABLE' : `HTTP_${relayRes.status}`;
+  } catch (relayErr) {
+    results.mailRelay = relayErr.message;
+  }
+
+  try {
+    const t1 = nodemailer.createTransport({
+      service: 'gmail',
+      lookup: ipv4Lookup,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+      connectionTimeout: 4000
+    });
+    await t1.verify();
+    results.serviceGmail = 'CONNECTED';
+  } catch (err) {
+    results.serviceGmail = err.message;
+  }
+  try {
+    const t2 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      lookup: ipv4Lookup,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+      connectionTimeout: 4000
+    });
+    await t2.verify();
+    results.port587 = 'CONNECTED';
+  } catch (err) {
+    results.port587 = err.message;
+  }
+  try {
+    const t3 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      lookup: ipv4Lookup,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+      connectionTimeout: 4000
+    });
+    await t3.verify();
+    results.port465 = 'CONNECTED';
+  } catch (err) {
+    results.port465 = err.message;
+  }
+  res.json(results);
+});
+
+app.get('/api/diagnostics/db', async (req, res) => {
+  const uri = process.env.MONGODB_URI;
+  try {
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 6000 });
+    res.json({ status: 'CONNECTED', readyState: mongoose.connection.readyState });
+  } catch (err) {
+    res.json({ status: 'FAILED', error: err.message });
+  }
+});
+
 // Security audit endpoint (protected)
 app.get('/api/admin/security-audit', requireUser, (req, res) => {
   // In production, this should be restricted to admin users only
@@ -1231,10 +1314,14 @@ app.post('/api/auth/password/reset', authLimiter, async (req, res) => {
   }
 });
 
-app.get('/api/auth/me', requireUser, (req, res) => {
+app.get('/api/auth/me', optionalUser, (req, res) => {
+  if (!req.user) {
+    return res.json({ authenticated: false, user: null });
+  }
   res.json({
+    authenticated: true,
     user: {
-      id: req.user.id,
+      id: req.user.id || req.user._id,
       name: req.user.name,
       email: req.user.email,
       phone: req.user.phone,

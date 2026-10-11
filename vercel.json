@@ -4,6 +4,14 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/mail-dispatch",
+      "destination": "/api/mail-relay"
+    },
+    {
+      "source": "/api/mail-relay",
+      "destination": "/api/mail-relay"
+    },
+    {
       "source": "/api/:match*",
       "destination": "https://hillsonwheels-api.onrender.com/api/:match*"
     },

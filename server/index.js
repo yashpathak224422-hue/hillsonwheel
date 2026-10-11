@@ -955,12 +955,25 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
     configuredHost: process.env.SMTP_HOST || null,
     configuredPort: process.env.SMTP_PORT || null
   };
+  const ipv4Lookup = (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback);
+
+  // Check Mail Relay endpoint over HTTPS
+  try {
+    const relaySecret = process.env.JWT_SECRET || 'DCIgcYdtHg5Rt-sGlM2Xo3W6gXZG9_GLx0AzEX5LIXgW3Cwky6VI-MZRitWa_oi7';
+    const relayRes = await fetch('https://www.hillsonwheels.com/mail-dispatch', {
+      signal: AbortSignal.timeout(5000)
+    });
+    results.mailRelay = relayRes.ok ? 'REACHABLE' : `HTTP_${relayRes.status}`;
+  } catch (relayErr) {
+    results.mailRelay = relayErr.message;
+  }
+
   try {
     const t1 = nodemailer.createTransport({
       service: 'gmail',
-      family: 4,
+      lookup: ipv4Lookup,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-      connectionTimeout: 6000
+      connectionTimeout: 4000
     });
     await t1.verify();
     results.serviceGmail = 'CONNECTED';
@@ -972,9 +985,9 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
-      family: 4,
+      lookup: ipv4Lookup,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-      connectionTimeout: 6000
+      connectionTimeout: 4000
     });
     await t2.verify();
     results.port587 = 'CONNECTED';
@@ -986,9 +999,9 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
-      family: 4,
+      lookup: ipv4Lookup,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-      connectionTimeout: 6000
+      connectionTimeout: 4000
     });
     await t3.verify();
     results.port465 = 'CONNECTED';
