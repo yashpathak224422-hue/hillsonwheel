@@ -6,6 +6,12 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const mongoose = require('mongoose');
+mongoose.set('bufferCommands', false);
+
+// Resilient in-memory authentication cache (never blocks requests if DB reconnects)
+const MEMORY_USERS = new Map();
+const MEMORY_CODES = new Map();
+
 const bcrypt = require('bcryptjs');
 let MongoMemoryServer = null;
 const jwt = require('jsonwebtoken');
@@ -824,7 +830,15 @@ async function requireUser(req, res, next) {
       return res.status(401).json({ error: 'Please sign in or create an account to place an order.', requireLogin: true });
     }
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(payload.sub);
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.findById(payload.sub);
+      } catch (_) {}
+    }
+    if (!user) {
+      user = MEMORY_USERS.get(payload.sub);
+    }
     if (!user) {
       logSecurityEvent('AUTH_INVALID_USER', { ip: req.ip, userId: payload.sub });
       return res.status(401).json({ error: 'Please sign in or create an account to place an order.', requireLogin: true });
@@ -842,7 +856,15 @@ async function optionalUser(req, res, next) {
     const token = req.cookies[JWT_COOKIE];
     if (token) {
       const payload = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(payload.sub);
+      let user = null;
+      if (mongoose.connection.readyState === 1) {
+        try {
+          user = await User.findById(payload.sub);
+        } catch (_) {}
+      }
+      if (!user) {
+        user = MEMORY_USERS.get(payload.sub);
+      }
       if (user) req.user = user;
     }
   } catch {
@@ -901,23 +923,49 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Enter a valid email address or phone number.' });
     }
 
-    const existing = await User.findOne(channel === 'email' ? { email: identity.email } : { phone: identity.phone });
+    let existing = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        existing = await User.findOne(channel === 'email' ? { email: identity.email } : { phone: identity.phone });
+      } catch (_) {}
+    } else {
+      existing = Array.from(MEMORY_USERS.values()).find(u =>
+        channel === 'email' ? u.email === identity.email : u.phone === identity.phone
+      );
+    }
+
     if (purpose === 'signup' && existing) return res.status(409).json({ error: 'An account already exists. Please sign in.' });
-    if ((purpose === 'login' || purpose === 'reset') && !existing) {
+    if ((purpose === 'login' || purpose === 'reset') && !existing && mongoose.connection.readyState === 1) {
       return res.json({ message: 'If an account matches, a verification code has been sent.' });
     }
 
     const code = crypto.randomInt(100000, 1000000).toString();
     const key = `${purpose}:${channel}:${identity.value}`;
-    await VerificationCode.findOneAndUpdate(
-      { key },
-      { key, codeHash: codeDigest(key, code), expiresAt: new Date(Date.now() + CODE_TTL_MS) },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+    const digest = codeDigest(key, code);
+    const expiresAt = new Date(Date.now() + CODE_TTL_MS);
+
+    // Always store in memory cache
+    MEMORY_CODES.set(key, { key, codeHash: digest, expiresAt: expiresAt.getTime() });
+
+    // Store in MongoDB if connected
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await VerificationCode.findOneAndUpdate(
+          { key },
+          { key, codeHash: digest, expiresAt },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+      } catch (err) {
+        console.warn('VerificationCode MongoDB save warning:', err.message);
+      }
+    }
 
     const delivered = await sendVerification({ channel, destination: identity.value, code });
     if (!delivered || (typeof delivered === 'object' && !delivered.success)) {
-      await VerificationCode.deleteOne({ key });
+      MEMORY_CODES.delete(key);
+      if (mongoose.connection.readyState === 1) {
+        VerificationCode.deleteOne({ key }).catch(() => {});
+      }
       return res.status(503).json({ error: `The ${channel === 'email' ? 'email' : 'WhatsApp'} delivery service is not configured yet.` });
     }
 
@@ -928,6 +976,7 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
     res.json({ message: responseMessage });
   } catch (error) {
     logSecurityEvent('OTP_REQUEST_FAILED', { ip: req.ip, error: error.message });
+    console.error('OTP request error:', error);
     res.status(500).json({ error: 'Could not send a verification code right now.' });
   }
 });
@@ -936,12 +985,31 @@ async function consumeCode({ channel, identifier, purpose, code }) {
   const identity = normalizeIdentifier(identifier, channel);
   if (!identity || !/^\d{6}$/.test(String(code || ''))) return null;
   const key = `${purpose}:${channel}:${identity.value}`;
-  const entry = await VerificationCode.findOneAndDelete({
-    key,
-    expiresAt: { $gt: new Date() },
-    codeHash: codeDigest(key, String(code))
-  });
-  return entry ? identity : null;
+  const targetHash = codeDigest(key, String(code));
+
+  // Check in-memory cache first
+  const memEntry = MEMORY_CODES.get(key);
+  if (memEntry && memEntry.expiresAt > Date.now() && memEntry.codeHash === targetHash) {
+    MEMORY_CODES.delete(key);
+    if (mongoose.connection.readyState === 1) {
+      VerificationCode.deleteOne({ key }).catch(() => {});
+    }
+    return identity;
+  }
+
+  // Check MongoDB if connected
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const entry = await VerificationCode.findOneAndDelete({
+        key,
+        expiresAt: { $gt: new Date() },
+        codeHash: targetHash
+      });
+      if (entry) return identity;
+    } catch (_) {}
+  }
+
+  return null;
 }
 
 app.post('/api/auth/register', authLimiter, async (req, res) => {
@@ -953,14 +1021,37 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const identity = await consumeCode({ channel, identifier, purpose: 'signup', code: otp });
     if (!identity) return res.status(400).json({ error: 'The code is invalid or expired. Request a new one.' });
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({ ...identity, name: String(name).trim().slice(0, 100), passwordHash, verifiedAt: new Date() });
+
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.create({ ...identity, name: String(name).trim().slice(0, 100), passwordHash, verifiedAt: new Date() });
+      } catch (err) {
+        if (err.code === 11000) {
+          logSecurityEvent('REGISTRATION_DUPLICATE', { ip: req.ip });
+          return res.status(409).json({ error: 'An account already exists. Please sign in.' });
+        }
+      }
+    }
+
+    if (!user) {
+      const fallbackId = new mongoose.Types.ObjectId().toString();
+      user = {
+        _id: fallbackId,
+        id: fallbackId,
+        ...identity,
+        name: String(name).trim().slice(0, 100),
+        passwordHash,
+        verifiedAt: new Date(),
+        addresses: []
+      };
+      MEMORY_USERS.set(fallbackId, user);
+    }
+
     issueSession(res, user);
   } catch (error) {
-    if (error.code === 11000) {
-      logSecurityEvent('REGISTRATION_DUPLICATE', { ip: req.ip });
-      return res.status(409).json({ error: 'An account already exists. Please sign in.' });
-    }
     logSecurityEvent('REGISTRATION_FAILED', { ip: req.ip, error: error.message });
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Could not create your account right now.' });
   }
 });
@@ -970,7 +1061,19 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const { channel, identifier, password } = req.body;
     const identity = normalizeIdentifier(identifier, channel);
     if (!identity || typeof password !== 'string') return res.status(400).json({ error: 'Enter your account details.' });
-    const user = await User.findOne(channel === 'email' ? { email: identity.email } : { phone: identity.phone });
+
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.findOne(channel === 'email' ? { email: identity.email } : { phone: identity.phone });
+      } catch (_) {}
+    }
+    if (!user) {
+      user = Array.from(MEMORY_USERS.values()).find(u =>
+        channel === 'email' ? u.email === identity.email : u.phone === identity.phone
+      );
+    }
+
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ error: 'The account details are not correct.' });
     issueSession(res, user);
   } catch (error) {
