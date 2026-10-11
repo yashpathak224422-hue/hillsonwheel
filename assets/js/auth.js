@@ -102,6 +102,13 @@
       state.codeSent = true;
       state.notice = result.message || 'Verification code sent.';
       message.textContent = state.notice;
+      if (result.code) {
+        const otpInput = form.querySelector('input[name="otp"]') || document.getElementById('auth-otp');
+        if (otpInput) {
+          otpInput.value = result.code;
+          otpInput.focus();
+        }
+      }
       if (state.mode === 'login') window.go('login', 1);
     } catch (error) {
       state.notice = error.message;

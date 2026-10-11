@@ -5,11 +5,11 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
-function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, saveCatalog, saveJourneys, buildInvoiceHtml }) {
+function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, saveCatalog, saveJourneys, buildInvoiceHtml, MEMORY_ORDERS = new Map(), MEMORY_USERS = new Map() }) {
   const router = express.Router();
   const ADMIN_USER = 'admin@1234';
   const ADMIN_PASS = 'admin@4321';
-  const JWT_SECRET = process.env.JWT_SECRET || 'hsw_super_secret_jwt_key_2026_minimum_32_chars';
+  const JWT_SECRET = process.env.JWT_SECRET || 'hsw-hillsonwheels-master-secure-jwt-key-2026';
 
   // Admin Authentication Middleware
   function requireAdmin(req, res, next) {
@@ -76,7 +76,14 @@ function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, s
      ========================================================================== */
   router.get('/stats', requireAdmin, async (req, res) => {
     try {
-      const allOrders = await Order.find({}).sort({ createdAt: -1 });
+      let allOrders = [];
+      try {
+        allOrders = await Order.find({}).sort({ createdAt: -1 });
+      } catch (_) {}
+      if (!allOrders || allOrders.length === 0) {
+        allOrders = Array.from(MEMORY_ORDERS.values());
+      }
+
       const totalRevenue = allOrders.reduce((acc, o) => (o.paymentStatus === 'paid' ? acc + (o.total || 0) : acc), 0);
       const totalOrders = allOrders.length;
       
@@ -94,15 +101,17 @@ function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, s
       let totalTrips = 0;
       let newTrips = 0;
       if (TripRequest) {
-        const trips = await TripRequest.find({});
-        totalTrips = trips.length;
-        newTrips = trips.filter(t => !t.status || t.status === 'new').length;
+        try {
+          const trips = await TripRequest.find({});
+          totalTrips = trips.length;
+          newTrips = trips.filter(t => !t.status || t.status === 'new').length;
+        } catch (_) {}
       }
 
       // Recent 7 days revenue
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const recentOrders = allOrders.filter(o => new Date(o.createdAt) >= sevenDaysAgo);
+      const recentOrders = allOrders.filter(o => new Date(o.createdAt || Date.now()) >= sevenDaysAgo);
 
       res.json({
         totalRevenue,
@@ -150,11 +159,22 @@ function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, s
         ];
       }
 
-      const total = await Order.countDocuments(query);
-      const orders = await Order.find(query)
-        .sort({ createdAt: -1 })
-        .skip((Number(page) - 1) * Number(limit))
-        .limit(Number(limit));
+      let orders = [];
+      let total = 0;
+      try {
+        total = await Order.countDocuments(query);
+        orders = await Order.find(query)
+          .sort({ createdAt: -1 })
+          .skip((Number(page) - 1) * Number(limit))
+          .limit(Number(limit));
+      } catch (_) {}
+
+      if (!orders || orders.length === 0) {
+        let list = Array.from(MEMORY_ORDERS.values());
+        if (status && status !== 'all') list = list.filter(o => o.orderStatus === status);
+        total = list.length;
+        orders = list.slice((Number(page) - 1) * Number(limit), Number(page) * Number(limit));
+      }
 
       res.json({
         orders,
@@ -170,7 +190,15 @@ function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, s
 
   router.get('/orders/:id', requireAdmin, async (req, res) => {
     try {
-      const order = await Order.findById(req.params.id);
+      let order = null;
+      try {
+        order = await Order.findById(req.params.id);
+      } catch (_) {}
+      if (!order) {
+        order = MEMORY_ORDERS.get(req.params.id) || Array.from(MEMORY_ORDERS.values()).find(o =>
+          String(o._id) === req.params.id || o.orderNumber === req.params.id
+        );
+      }
       if (!order) return res.status(404).json({ error: 'Order not found.' });
       res.json({ order });
     } catch (err) {

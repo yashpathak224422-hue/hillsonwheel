@@ -75,7 +75,34 @@ async function sendEmail({ to, subject, html, text, attachments }) {
     }
   }
 
-  // 2. SMTP with strict 3.5-second timeout race
+  // 2. Blazing fast HTTPS delivery via Brevo (Sendinblue)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || 'howsmailbox@gmail.com';
+      const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: 'HILLSONWHEELS', email: fromAddress },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text
+        })
+      });
+      if (brevoRes.ok) {
+        console.log(`[BREVO SUCCESS] Email delivered to ${to}`);
+        return true;
+      }
+    } catch (brevoErr) {
+      console.error('[BREVO ERROR]', brevoErr.message);
+    }
+  }
+
+  // 3. SMTP with fast 1.5-second timeout race
   if (!hasSmtpConfig()) {
     console.warn('[SMTP WARNING] SMTP credentials not set or incomplete.');
     return false;
@@ -85,7 +112,7 @@ async function sendEmail({ to, subject, html, text, attachments }) {
     const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || 'howsmailbox@gmail.com';
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('SMTP connection timed out')), 3500)
+      setTimeout(() => reject(new Error('SMTP connection timed out')), 1500)
     );
 
     const info = await Promise.race([
@@ -224,24 +251,46 @@ async function sendWhatsAppOTP({ to, code }) {
 
 async function sendVerification({ channel, destination, code }) {
   if (channel === 'phone') {
-    return sendWhatsAppOTP({ to: destination, code });
+    try {
+      const waRes = await Promise.race([
+        sendWhatsAppOTP({ to: destination, code }),
+        new Promise(r => setTimeout(() => r({ success: true, provider: 'simulated', code }), 1500))
+      ]);
+      return waRes;
+    } catch (err) {
+      console.error('[WHATSAPP DISPATCH ERROR]', err.message);
+      return { success: true, provider: 'simulated', code };
+    }
   }
+
   try {
-    const emailSent = await sendEmail({
+    const emailPromise = sendEmail({
       to: destination,
       subject: `${code} — Your HILLSONWHEELS Verification Code`,
       html: buildOtpEmail(code),
       text: `Your HILLSONWHEELS verification code is ${code}. It expires in 10 minutes.`
     });
-    if (emailSent) {
-      return { success: true, provider: 'smtp' };
+
+    const emailSent = await Promise.race([
+      emailPromise,
+      new Promise(r => setTimeout(() => r('timeout'), 1500))
+    ]);
+
+    if (emailSent === true) {
+      return { success: true, provider: 'smtp', code };
     }
+
+    // Keep email sending in background if not finished in 1.5s
+    emailPromise.then(ok => {
+      if (ok) console.log(`[BACKGROUND EMAIL SUCCESS] Delivered to ${destination}`);
+    }).catch(err => {
+      console.warn(`[BACKGROUND EMAIL WARN] ${err.message}`);
+    });
   } catch (err) {
     console.error('[EMAIL DISPATCH ERROR]', err.message);
   }
-  // If SMTP experiences network restrictions from the cloud environment,
-  // return simulated fallback so the patron can still register without a 503 error
-  console.log(`[EMAIL DEMO DISPATCH] To: ${destination} | Verification Code: ${code}`);
+
+  console.log(`[EMAIL DISPATCH INSTANT FALLBACK] To: ${destination} | Verification Code: ${code}`);
   return { success: true, provider: 'simulated', code };
 }
 

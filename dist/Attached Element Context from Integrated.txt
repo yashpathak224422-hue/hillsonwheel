@@ -1,0 +1,47 @@
+Attached Element Context from Integrated Browser
+
+Element: span
+
+URL: http://localhost:3000/#home
+
+HTML Path: div#app > footer > div.footer-topline > div.season-bar > span
+
+Outer HTML:
+```html
+<span style="opacity:.72;padding:2px 4px">Atmosphere:</span>
+```
+
+Dimensions:
+- top: 275px
+- left: 683px
+- width: 73px
+- height: 16px
+
+CSS:
+```css
+element { opacity:.72;padding:2px 4px }
+* { box-sizing:border-box;margin:0 }
+
+/* Inherited */
+.season-bar { font-size:9px; letter-spacing:.12em }
+footer { font-size:13px }
+html, body { color:var(--tx); font-family:var(--sans); font-weight:300 }
+
+/* Resolved values */
+margin: 0px;
+padding: 2px 4px;
+box-sizing: border-box;
+color: rgb(234, 229, 216);
+display: block;
+font-family: Manrope, Inter, sans-serif;
+font-size: 9px;
+font-weight: 300;
+height: 16px;
+letter-spacing: 1.08px;
+opacity: 0.72;
+width: 72.7px;
+
+/* CSS variables */
+--sans: 'Manrope',Inter,sans-serif;
+--tx: #EAE5D8;
+```

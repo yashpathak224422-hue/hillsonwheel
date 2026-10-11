@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: hillsonwheels-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --omit=dev
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        value: mongodb+srv://digitrastudio_db_user:GpObNOBDW17q6zPS@cluster0.bocr011.mongodb.net/hillsonwheels?retryWrites=true&w=majority&appName=Cluster0
+      - key: JWT_SECRET
+        value: DCIgcYdtHg5Rt-sGlM2Xo3W6gXZG9_GLx0AzEX5LIXgW3Cwky6VI-MZRitWa_oi7
+      - key: RAZORPAY_KEY_ID
+        value: rzp_live_TkVOqQfZM9kbdP
+      - key: RAZORPAY_KEY_SECRET
+        value: xvHBwM4A4TOGmGpZcvwrd4jT
+      - key: SMTP_USER
+        value: howsmailbox@gmail.com
+      - key: SMTP_PASSWORD
+        value: dblscnqahnphuzhj
+      - key: APP_ORIGIN
+        value: https://www.hillsonwheels.com
+      - key: ALLOWED_ORIGINS
+        value: https://www.hillsonwheels.com,https://hillsonwheels.vercel.app
