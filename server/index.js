@@ -921,7 +921,7 @@ app.get('/api/health', async (req, res) => {
   if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
     try {
       await mongoose.connect(process.env.MONGODB_URI, {
-        serverSelectionTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 10000,
         maxPoolSize: 5
       });
     } catch (err) {
@@ -1771,12 +1771,37 @@ app.post('/api/orders/:id/tracking', async (req, res) => {
 app.get('/api/orders/track/:query', async (req, res) => {
   try {
     const term = String(req.params.query || '').trim();
-    const order = await Order.findOne({
-      $or: [
-        { trackingNumber: { $regex: new RegExp(`^${term}$`, 'i') } },
-        { orderNumber: { $regex: new RegExp(`^${term}$`, 'i') } }
-      ]
-    }).select('orderNumber trackingNumber orderStatus statusHistory shippingAddress.city shippingAddress.state estimatedDelivery createdAt items.name items.variant');
+    let order = null;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        order = await Order.findOne({
+          $or: [
+            { trackingNumber: { $regex: new RegExp(`^${term}$`, 'i') } },
+            { orderNumber: { $regex: new RegExp(`^${term}$`, 'i') } }
+          ]
+        }).select('orderNumber trackingNumber orderStatus statusHistory shippingAddress.city shippingAddress.state estimatedDelivery createdAt items.name items.variant');
+      } catch (_) {}
+    }
+
+    if (!order) {
+      const mem = Array.from(MEMORY_ORDERS.values()).find(o =>
+        (o.trackingNumber && o.trackingNumber.toLowerCase() === term.toLowerCase()) ||
+        (o.orderNumber && o.orderNumber.toLowerCase() === term.toLowerCase())
+      );
+      if (mem) {
+        order = {
+          orderNumber: mem.orderNumber,
+          trackingNumber: mem.trackingNumber,
+          orderStatus: mem.orderStatus,
+          statusHistory: mem.statusHistory || [],
+          shippingAddress: { city: mem.shippingAddress?.city, state: mem.shippingAddress?.state },
+          estimatedDelivery: mem.estimatedDelivery,
+          createdAt: mem.createdAt,
+          items: (mem.items || []).map(i => ({ name: i.name, variant: i.variant }))
+        };
+      }
+    }
 
     if (!order) {
       return res.status(404).json({ error: 'No parcel found matching this Tracking ID or Order Number.' });
@@ -2057,11 +2082,26 @@ app.post('/api/payments/simulate-otp', (req, res) => {
 // Invoice download endpoint
 app.get('/api/orders/:id/invoice', optionalUser, async (req, res) => {
   try {
-    const query = mongoose.Types.ObjectId.isValid(req.params.id)
-      ? { $or: [{ _id: req.params.id }, { orderNumber: req.params.id }, { trackingNumber: req.params.id }] }
-      : { $or: [{ orderNumber: req.params.id }, { trackingNumber: req.params.id }] };
-    const order = await Order.findOne(query);
+    const id = req.params.id;
+    let order = null;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const query = mongoose.Types.ObjectId.isValid(id)
+          ? { $or: [{ _id: id }, { orderNumber: id }, { trackingNumber: id }] }
+          : { $or: [{ orderNumber: id }, { trackingNumber: id }] };
+        order = await Order.findOne(query);
+      } catch (_) {}
+    }
+
+    if (!order) {
+      order = MEMORY_ORDERS.get(id) || Array.from(MEMORY_ORDERS.values()).find(o =>
+        String(o._id) === id || String(o.id) === id || o.orderNumber === id || o.trackingNumber === id
+      );
+    }
+
     if (!order) return res.status(404).json({ error: 'Order not found.' });
+
     const invoiceHtml = buildInvoiceHtml(order);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `inline; filename="Invoice-${order.orderNumber}.html"`);
@@ -2136,7 +2176,7 @@ async function connectDatabase() {
   if (configuredUri) {
     try {
       dbConnectionPromise = mongoose.connect(configuredUri, {
-        serverSelectionTimeoutMS: 2000,
+        serverSelectionTimeoutMS: 10000,
         maxPoolSize: 5,
         minPoolSize: 1,
         maxIdleTimeMS: 30000,
