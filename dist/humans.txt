@@ -1,8 +1,8 @@
 /* TEAM */
 Creator & Lead Developer: Yash Pathak
-Brand: DigitraStudio
-Contact: digitrastudio@gmail.com
-Location: Delhi, India
+Brand: HillsOnWheels
+Contact: howsmailbox@gmail.com
+Location: Uttarakhand, India
 
 /* ARCHITECTURE & TECHNOLOGY STACK */
 Platform Type: Bespoke Custom Web Application (100% Custom Coded from Scratch)
@@ -13,7 +13,3 @@ Database: MongoDB Atlas & Persistent Storage Engine
 Security: JWT Authentication, SHA-256 HMAC Session Verification, Helmet Security Headers
 Standards: W3C Valid, Schema.org JSON-LD, Open Graph Protocol, Mobile First Responsive
 Last Updated: October 2026
-
-/* Founder */
-Founder & Ceo: Lalit Pathak
-Other Comepanies: Raise System, DigitraStudio
