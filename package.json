@@ -5,7 +5,7 @@
   "description": "HILLSONWHEELS website and MongoDB API",
   "main": "server/index.js",
   "scripts": {
-    "start": "node --max-old-space-size=256 server/index.js",
+    "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "build": "node build.js",
     "build:prod": "node build.js --production"

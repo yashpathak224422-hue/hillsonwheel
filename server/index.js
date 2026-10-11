@@ -3,6 +3,12 @@ const dns = require('dns');
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
+process.on('unhandledRejection', (reason) => {
+  console.warn('[UNHANDLED REJECTION]', reason && reason.message ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.message);
+});
 const crypto = require('crypto');
 const express = require('express');
 const cookieParser = require('cookie-parser');
