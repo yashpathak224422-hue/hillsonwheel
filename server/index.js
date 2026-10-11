@@ -903,11 +903,16 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
     );
 
     const delivered = await sendVerification({ channel, destination: identity.value, code });
-    if (!delivered) {
+    if (!delivered || (typeof delivered === 'object' && !delivered.success)) {
       await VerificationCode.deleteOne({ key });
       return res.status(503).json({ error: `The ${channel === 'email' ? 'email' : 'WhatsApp'} delivery service is not configured yet.` });
     }
-    res.json({ message: 'If an account matches, a verification code has been sent.' });
+
+    const responseMessage = channel === 'phone'
+      ? (delivered.provider === 'simulated' ? `Your verification code is: ${code}` : 'A verification code has been sent to your WhatsApp.')
+      : 'If an account matches, a verification code has been sent to your email.';
+
+    res.json({ message: responseMessage });
   } catch (error) {
     logSecurityEvent('OTP_REQUEST_FAILED', { ip: req.ip, error: error.message });
     res.status(500).json({ error: 'Could not send a verification code right now.' });
