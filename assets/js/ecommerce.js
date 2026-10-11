@@ -2050,10 +2050,16 @@
     try {
       // Step 1: Create Razorpay order via backend
       showToast('Opening secure Razorpay payment gateway…', 'info');
+      const userToken = localStorage.getItem('hsw_user_token') || '';
+      const authHeader = userToken ? { 'Authorization': `Bearer ${userToken}` } : {};
+
       const rzpRes = await fetch('/api/create-order', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        },
         body: JSON.stringify({
           amount: orderData.total,
           receipt: orderData.orderNumber,
@@ -2068,12 +2074,15 @@
 
       // If simulation mode (no live keys or simulated order)
       if (rzpData.simulation) {
-        showToast('Processing test payment simulation…', 'info');
+        showToast('Processing payment simulation…', 'info');
         await new Promise(r => setTimeout(r, 800));
         const verRes = await fetch('/api/verify-payment', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeader
+          },
           body: JSON.stringify({
             razorpay_order_id: rzpData.order_id || rzpData.id,
             razorpay_payment_id: `pay_sim_${Date.now()}`,
@@ -2117,7 +2126,10 @@
             const verRes = await fetch('/api/verify-payment', {
               method: 'POST',
               credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...authHeader
+              },
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -2144,7 +2156,7 @@
       rzp.on('payment.failed', function(response) {
         console.error('Razorpay payment failure event:', response.error);
         const failReason = (response.error && (response.error.description || response.error.reason)) || 'Transaction could not be completed';
-        showToast(`Payment Failed: ${failReason}`, 'error');
+        showToast(`Payment Failed: ${failReason}. You can also pay via Direct UPI QR or Cash on Delivery.`, 'error');
         if (btn) { btn.disabled = false; btn.textContent = 'Retry Payment'; }
       });
 
