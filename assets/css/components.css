@@ -1,0 +1,237 @@
+/* ==========================================================================
+   HILLSONWHEELS - INTERACTIVE COMPONENTS
+   ========================================================================== */
+/* Buttons */
+.btn {
+  background: none;
+  border: 1px solid var(--gold);
+  color: var(--ivory);
+  padding: 13px 28px;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.35s var(--ease-spring);
+  font-family: var(--sans);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 2px;
+}
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(197, 168, 105, 0.25), transparent);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+.btn:hover::before {
+  left: 100%;
+}
+.btn:hover {
+  background: rgba(197, 168, 105, 0.15);
+  border-color: var(--gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(197, 168, 105, 0.2);
+}
+.btn.on {
+  background: var(--gold);
+  color: var(--tx-dark);
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(197, 168, 105, 0.3);
+}
+.btn.on:hover {
+  background: var(--gold-light);
+  box-shadow: 0 8px 28px rgba(197, 168, 105, 0.5);
+  transform: translateY(-2px);
+}
+
+/* Audio Synthesizer Toggle */
+.audio-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-gold);
+  border-radius: 99px;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: rgba(13, 14, 12, 0.6);
+  backdrop-filter: blur(8px);
+  transition: all 0.3s ease;
+}
+.audio-toggle:hover, .audio-toggle.on {
+  background: var(--gold);
+  color: var(--bg);
+  border-color: var(--gold);
+}
+.audio-wave {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+.audio-wave span {
+  width: 2px;
+  height: 100%;
+  background: currentColor;
+  border-radius: 1px;
+  animation: wave 1s infinite ease-in-out;
+}
+.audio-wave span:nth-child(2) { animation-delay: 0.2s; }
+.audio-wave span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* Season Selector */
+.season-bar {
+  display: inline-flex;
+  gap: 6px;
+  background: rgba(0,0,0,0.4);
+  padding: 3px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(6px);
+}
+.season-btn {
+  cursor: pointer;
+  opacity: 0.65;
+  transition: all 0.3s ease;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.season-btn:hover, .season-btn.on {
+  opacity: 1;
+  background: var(--gold);
+  color: var(--bg);
+}
+
+/* Filter Chips */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}
+.chip {
+  padding: 8px 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 99px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.3s var(--ease-spring);
+}
+.chip:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  transform: translateY(-2px);
+}
+.chip.on {
+  background: var(--gold);
+  color: var(--tx-dark);
+  border-color: var(--gold);
+  font-weight: 600;
+}
+
+/* Input Fields */
+input, select, textarea {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 0;
+  width: 100%;
+  outline: 0;
+  font-size: 14px;
+  color: inherit;
+  font-family: var(--sans);
+  transition: border-color 0.3s ease;
+}
+input:focus, select:focus, textarea:focus {
+  border-bottom-color: var(--gold);
+}
+input::placeholder {
+  color: rgba(233, 227, 213, 0.4);
+}
+
+/* Waypoint Badges */
+.waypoint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(197, 168, 105, 0.08);
+  border: 1px solid rgba(197, 168, 105, 0.25);
+  border-radius: 4px;
+  padding: 8px 14px;
+  transition: all 0.3s ease;
+}
+.waypoint-badge:hover {
+  background: rgba(197, 168, 105, 0.15);
+  border-color: var(--gold);
+  transform: translateX(4px);
+}
+.badge-num {
+  font-family: var(--serif);
+  font-size: 20px;
+  color: var(--gold);
+  line-height: 1;
+}
+
+/* Cards */
+.card {
+  cursor: pointer;
+  transition: transform 0.4s var(--ease-spring), box-shadow 0.4s ease;
+  position: relative;
+  background: var(--bg-card);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+.card:hover {
+  transform: translateY(-8px) scale(1.015);
+  box-shadow: 0 24px 48px -12px rgba(0,0,0,0.7), 0 0 0 1px var(--border-gold);
+}
+.card .im {
+  aspect-ratio: 4/5;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  position: relative;
+}
+.card .im i {
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.6s var(--ease-spring);
+}
+.card:hover .im i {
+  transform: scale(1.06);
+}
+.card .info {
+  padding: 18px 20px;
+}
+.card h3 {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+.card p {
+  font-size: 13px;
+  opacity: 0.8;
+  line-height: 1.6;
+}
