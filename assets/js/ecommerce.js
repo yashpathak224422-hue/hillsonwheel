@@ -439,7 +439,15 @@
 
   async function checkCurrentUser() {
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      const userToken = localStorage.getItem('hsw_user_token') || '';
+      if (!userToken && !document.cookie.includes('hsw_token')) {
+        state.currentUser = null;
+        return null;
+      }
+      const res = await fetch('/api/auth/me', {
+        headers: userToken ? { 'Authorization': `Bearer ${userToken}` } : {},
+        credentials: 'same-origin'
+      });
       if (res.ok) {
         const data = await res.json();
         state.currentUser = data.user;
@@ -2634,7 +2642,12 @@
 
   async function loadProfileData() {
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      const userToken = localStorage.getItem('hsw_user_token') || '';
+      if (!userToken && !document.cookie.includes('hsw_token')) return;
+      const res = await fetch('/api/auth/me', {
+        headers: userToken ? { 'Authorization': `Bearer ${userToken}` } : {},
+        credentials: 'same-origin'
+      });
       if (!res.ok) return;
       const data = await res.json();
       const u = data.user;

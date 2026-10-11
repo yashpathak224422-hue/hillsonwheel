@@ -975,9 +975,8 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
       );
     }
 
-    if (purpose === 'signup' && existing) return res.status(409).json({ error: 'An account already exists. Please sign in.' });
-    if ((purpose === 'login' || purpose === 'reset') && !existing && mongoose.connection.readyState === 1) {
-      return res.json({ message: 'If an account matches, a verification code has been sent.' });
+    if (purpose === 'reset' && !existing) {
+      return res.status(404).json({ error: 'No account found with this email or phone. Please create an account.' });
     }
 
     const code = crypto.randomInt(100000, 1000000).toString();
@@ -1002,11 +1001,19 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
     }
 
     const delivered = await sendVerification({ channel, destination: identity.value, code });
-    const responseMessage = channel === 'phone'
-      ? 'A verification code has been sent to your WhatsApp / mobile number.'
-      : 'A verification code has been sent to your email address.';
 
-    res.json({ message: responseMessage });
+    if (channel === 'phone') {
+      const hasPhoneGateway = Boolean(process.env.WHATSAPP_ACCESS_TOKEN || process.env.TWILIO_ACCOUNT_SID);
+      if (!hasPhoneGateway) {
+        return res.json({
+          message: 'Carrier SMS/WhatsApp gateway is not connected. Please use Email verification (fully active) or sign in as Patron.',
+          gatewayNotice: true
+        });
+      }
+      return res.json({ message: 'A verification code has been sent to your WhatsApp / mobile number.' });
+    }
+
+    res.json({ message: `Verification code sent to ${identity.value}. Please check your inbox and spam folder.` });
   } catch (error) {
     logSecurityEvent('OTP_REQUEST_FAILED', { ip: req.ip, error: error.message });
     console.error('OTP request error:', error);
@@ -1020,12 +1027,22 @@ async function consumeCode({ channel, identifier, purpose, code }) {
   const key = `${purpose}:${channel}:${identity.value}`;
   const targetHash = codeDigest(key, String(code));
 
+  const altPurpose = purpose === 'login' ? 'signup' : (purpose === 'signup' ? 'login' : null);
+  const altKey = altPurpose ? `${altPurpose}:${channel}:${identity.value}` : null;
+  const altHash = altKey ? codeDigest(altKey, String(code)) : null;
+
   // Check in-memory cache first
-  const memEntry = MEMORY_CODES.get(key);
-  if (memEntry && memEntry.expiresAt > Date.now() && memEntry.codeHash === targetHash) {
-    MEMORY_CODES.delete(key);
+  let memEntry = MEMORY_CODES.get(key);
+  let usedKey = key;
+  if (!memEntry && altKey && MEMORY_CODES.has(altKey)) {
+    memEntry = MEMORY_CODES.get(altKey);
+    usedKey = altKey;
+  }
+
+  if (memEntry && memEntry.expiresAt > Date.now() && (memEntry.codeHash === targetHash || (altHash && memEntry.codeHash === altHash))) {
+    MEMORY_CODES.delete(usedKey);
     if (mongoose.connection.readyState === 1) {
-      VerificationCode.deleteOne({ key }).catch(() => {});
+      VerificationCode.deleteOne({ key: usedKey }).catch(() => {});
     }
     return identity;
   }
@@ -1034,9 +1051,9 @@ async function consumeCode({ channel, identifier, purpose, code }) {
   if (mongoose.connection.readyState === 1) {
     try {
       const entry = await VerificationCode.findOneAndDelete({
-        key,
+        key: { $in: altKey ? [key, altKey] : [key] },
         expiresAt: { $gt: new Date() },
-        codeHash: targetHash
+        $or: [{ codeHash: targetHash }, ...(altHash ? [{ codeHash: altHash }] : [])]
       });
       if (entry) return identity;
     } catch (_) {}
@@ -1109,7 +1126,12 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       );
     }
 
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ error: 'The account details are not correct.' });
+    if (!user) {
+      return res.status(401).json({ error: 'Account not found. Please click "Create an account" or "Sign in with a code" below.' });
+    }
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
+      return res.status(401).json({ error: 'Incorrect password. Click "Forgot password?" or "Sign in with a code".' });
+    }
     issueSession(res, user);
   } catch (error) {
     logSecurityEvent('LOGIN_FAILED', { ip: req.ip, error: error.message });
@@ -1134,7 +1156,36 @@ app.post('/api/auth/otp/verify', authLimiter, async (req, res) => {
         channel === 'email' ? u.email === identity.email : u.phone === identity.phone
       );
     }
-    if (!user) return res.status(401).json({ error: 'The account details are not correct.' });
+    if (!user) {
+      // Auto-provision patron account for verified email or phone
+      const defaultName = identity.email ? identity.email.split('@')[0] : 'Pahadi Patron';
+      const tempPasswordHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+      if (mongoose.connection.readyState === 1) {
+        try {
+          user = await User.create({
+            ...identity,
+            name: defaultName,
+            passwordHash: tempPasswordHash,
+            verifiedAt: new Date(),
+            addresses: []
+          });
+        } catch (_) {}
+      }
+      if (!user) {
+        const fallbackId = 'usr_' + Date.now();
+        user = {
+          _id: fallbackId,
+          id: fallbackId,
+          ...identity,
+          name: defaultName,
+          passwordHash: tempPasswordHash,
+          verifiedAt: new Date(),
+          addresses: []
+        };
+        MEMORY_USERS.set(fallbackId, user);
+        saveUsers(MEMORY_USERS);
+      }
+    }
     issueSession(res, user);
   } catch (error) {
     logSecurityEvent('OTP_VERIFY_FAILED', { ip: req.ip, error: error.message });
