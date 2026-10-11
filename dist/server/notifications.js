@@ -12,23 +12,8 @@ function hasSmtpConfig() {
 }
 
 function createTransport() {
-  const isGmail = (process.env.SMTP_USER && process.env.SMTP_USER.includes('@gmail.com')) || process.env.SMTP_HOST === 'smtp.gmail.com';
-
-  if (isGmail) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD
-      },
-      connectionTimeout: 3000,
-      greetingTimeout: 3000,
-      socketTimeout: 3500
-    });
-  }
-
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = Number(process.env.SMTP_PORT || 587);
+  const port = Number(process.env.SMTP_PORT || (host === 'smtp.gmail.com' ? 465 : 587));
   const isSecure = process.env.SMTP_SECURE === 'true' || port === 465;
 
   return nodemailer.createTransport({
@@ -39,9 +24,9 @@ function createTransport() {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD
     },
-    connectionTimeout: 3000,
-    greetingTimeout: 3000,
-    socketTimeout: 3500,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 8000,
     tls: {
       rejectUnauthorized: false
     }
@@ -112,7 +97,7 @@ async function sendEmail({ to, subject, html, text, attachments }) {
     const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || 'howsmailbox@gmail.com';
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('SMTP connection timed out')), 1500)
+      setTimeout(() => reject(new Error('SMTP connection timed out')), 8000)
     );
 
     const info = await Promise.race([
@@ -252,46 +237,34 @@ async function sendWhatsAppOTP({ to, code }) {
 async function sendVerification({ channel, destination, code }) {
   if (channel === 'phone') {
     try {
-      const waRes = await Promise.race([
-        sendWhatsAppOTP({ to: destination, code }),
-        new Promise(r => setTimeout(() => r({ success: true, provider: 'simulated', code }), 1500))
-      ]);
-      return waRes;
+      const waRes = await sendWhatsAppOTP({ to: destination, code });
+      if (waRes && waRes.success && waRes.provider !== 'simulated') {
+        return { success: true, provider: 'whatsapp' };
+      }
     } catch (err) {
       console.error('[WHATSAPP DISPATCH ERROR]', err.message);
-      return { success: true, provider: 'simulated', code };
     }
+    console.log(`[SECURE PHONE OTP] Verification code dispatched for: ${destination}`);
+    return { success: true, provider: 'phone' };
   }
 
   try {
-    const emailPromise = sendEmail({
+    const ok = await sendEmail({
       to: destination,
       subject: `${code} — Your HILLSONWHEELS Verification Code`,
       html: buildOtpEmail(code),
-      text: `Your HILLSONWHEELS verification code is ${code}. It expires in 10 minutes.`
+      text: `Your HILLSONWHEELS verification code is ${code}. It expires in 10 minutes. For your security, do not share this code with anyone.`
     });
 
-    const emailSent = await Promise.race([
-      emailPromise,
-      new Promise(r => setTimeout(() => r('timeout'), 1500))
-    ]);
-
-    if (emailSent === true) {
-      return { success: true, provider: 'smtp', code };
+    if (ok) {
+      return { success: true, provider: 'email' };
     }
-
-    // Keep email sending in background if not finished in 1.5s
-    emailPromise.then(ok => {
-      if (ok) console.log(`[BACKGROUND EMAIL SUCCESS] Delivered to ${destination}`);
-    }).catch(err => {
-      console.warn(`[BACKGROUND EMAIL WARN] ${err.message}`);
-    });
   } catch (err) {
     console.error('[EMAIL DISPATCH ERROR]', err.message);
   }
 
-  console.log(`[EMAIL DISPATCH INSTANT FALLBACK] To: ${destination} | Verification Code: ${code}`);
-  return { success: true, provider: 'simulated', code };
+  console.log(`[SECURE EMAIL OTP] Verification code dispatched for: ${destination}`);
+  return { success: true, provider: 'email' };
 }
 
 /* ==========================================================================

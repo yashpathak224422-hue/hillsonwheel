@@ -993,10 +993,10 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
 
     const delivered = await sendVerification({ channel, destination: identity.value, code });
     const responseMessage = channel === 'phone'
-      ? (delivered && delivered.provider !== 'simulated' ? 'A verification code has been sent to your WhatsApp.' : `Your verification code is: ${code}`)
-      : (delivered && delivered.provider !== 'simulated' ? 'A verification code has been sent to your email.' : `Your verification code is: ${code}`);
+      ? 'A verification code has been sent to your WhatsApp / mobile number.'
+      : 'A verification code has been sent to your email address.';
 
-    res.json({ message: responseMessage, code });
+    res.json({ message: responseMessage });
   } catch (error) {
     logSecurityEvent('OTP_REQUEST_FAILED', { ip: req.ip, error: error.message });
     console.error('OTP request error:', error);
