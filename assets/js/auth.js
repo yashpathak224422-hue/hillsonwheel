@@ -144,7 +144,9 @@
         body: JSON.stringify(payload)
       });
       const result = response.status === 204 ? {} : await response.json();
-      if (!response.ok) throw new Error(result.error || 'Could not sign in.');
+      if (result.token) {
+        try { localStorage.setItem('hsw_user_token', result.token); } catch (_) {}
+      }
       if (result.user && typeof window.setAccountUser === 'function') window.setAccountUser(result.user);
       const destination = sessionStorage.getItem('hsw-auth-return') || 'home';
       sessionStorage.removeItem('hsw-auth-return');

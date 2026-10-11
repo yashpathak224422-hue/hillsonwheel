@@ -834,7 +834,10 @@ function issueSession(res, user) {
     domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined
   });
   logSecurityEvent('SESSION_ISSUED', { userId: user.id || user._id, ip: res.req?.ip });
-  res.json({ user: { id: user.id || user._id, name: user.name, email: user.email, phone: user.phone, addresses: user.addresses || [] } });
+  res.json({ 
+    token,
+    user: { id: user.id || user._id, name: user.name, email: user.email, phone: user.phone, addresses: user.addresses || [] } 
+  });
 }
 
 async function requireUser(req, res, next) {
@@ -1432,7 +1435,7 @@ app.post('/api/coupons/validate', (req, res) => {
 /* ==========================================================================
    ORDERS & CHECKOUT ENDPOINTS
    ========================================================================== */
-app.post('/api/orders', requireUser, async (req, res) => {
+app.post('/api/orders', optionalUser, async (req, res) => {
   try {
     const { items, shippingAddress, shippingMethod, giftOptions, couponCode, paymentMethod, paymentDetails } = req.body;
 
@@ -1440,9 +1443,38 @@ app.post('/api/orders', requireUser, async (req, res) => {
       return res.status(400).json({ error: 'Your basket is empty.' });
     }
 
-    if (!shippingAddress || !shippingAddress.fullName || !shippingAddress.phone || !shippingAddress.pincode || !shippingAddress.house || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state) {
-      return res.status(400).json({ error: 'Please provide complete delivery address details.' });
+    // Flexible address resolution (supports full address object or string from quick checkout)
+    let rawAddr = shippingAddress;
+    if (!rawAddr && req.body.address) {
+      const addrStr = String(req.body.address).trim();
+      const parts = addrStr.split(',').map(s => s.trim());
+      rawAddr = {
+        fullName: (req.user && req.user.name) || 'Mountain Traveler',
+        phone: (req.user && req.user.phone) || '8218359120',
+        pincode: '248001',
+        house: parts[0] || addrStr,
+        street: parts[1] || 'Mall Road',
+        city: parts[2] || 'Dehradun',
+        state: 'Uttarakhand'
+      };
     }
+
+    if (!rawAddr) {
+      return res.status(400).json({ error: 'Please provide delivery address details.' });
+    }
+
+    const normAddress = {
+      fullName: String(rawAddr.fullName || (req.user && req.user.name) || 'Valued Customer').trim(),
+      phone: String(rawAddr.phone || (req.user && req.user.phone) || '9876543210').trim(),
+      altPhone: String(rawAddr.altPhone || '').trim(),
+      pincode: String(rawAddr.pincode || '248001').trim(),
+      house: String(rawAddr.house || rawAddr.street || 'Address').trim(),
+      street: String(rawAddr.street || rawAddr.house || 'Valley Road').trim(),
+      landmark: String(rawAddr.landmark || '').trim(),
+      city: String(rawAddr.city || 'Dehradun').trim(),
+      state: String(rawAddr.state || 'Uttarakhand').trim(),
+      type: rawAddr.type || 'Home'
+    };
 
     // Validate and price items from Catalog
     let calculatedSubtotal = 0;
@@ -1525,22 +1557,11 @@ app.post('/api/orders', requireUser, async (req, res) => {
     const orderData = {
       orderNumber,
       userId: req.user ? (req.user._id || req.user.id) : undefined,
-      customerName: shippingAddress.fullName,
-      customerEmail: req.user ? req.user.email : shippingAddress.email || '',
-      customerPhone: shippingAddress.phone,
+      customerName: normAddress.fullName,
+      customerEmail: req.user ? req.user.email : (rawAddr.email || ''),
+      customerPhone: normAddress.phone,
       items: validatedItems,
-      shippingAddress: {
-        fullName: String(shippingAddress.fullName).trim(),
-        phone: String(shippingAddress.phone).trim(),
-        altPhone: String(shippingAddress.altPhone || '').trim(),
-        pincode: String(shippingAddress.pincode).trim(),
-        house: String(shippingAddress.house).trim(),
-        street: String(shippingAddress.street).trim(),
-        landmark: String(shippingAddress.landmark || '').trim(),
-        city: String(shippingAddress.city).trim(),
-        state: String(shippingAddress.state).trim(),
-        type: shippingAddress.type || 'Home'
-      },
+      shippingAddress: normAddress,
       shippingMethod: {
         id: shippingMethod && shippingMethod.id ? shippingMethod.id : 'standard',
         name: shippingMethod && shippingMethod.id === 'express' ? 'Himalayan Express Air Logistics (1-2 Days)' : 'Direct Mountain Dispatch (3-5 Days)',

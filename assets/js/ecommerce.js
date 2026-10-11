@@ -490,12 +490,6 @@
     if (!isLoggedIn()) {
       await checkCurrentUser();
     }
-    if (!isLoggedIn()) {
-      sessionStorage.setItem('hsw-auth-return', 'checkout');
-      showToast('Please sign in or create an account before placing your order.', 'info');
-      window.go('login');
-      return;
-    }
     window.go('checkout');
   }
 
@@ -1614,103 +1608,69 @@
     switch (state.paymentMethod) {
       case 'UPI':
         return `
-          <div style="text-align:center">
-            <div class="lab">Instant UPI Payment (0% Gateway Fee)</div>
-            <h3 style="font-size:20px;margin:4px 0 14px">Scan & Pay ₹${total}</h3>
+          <div style="text-align:center;padding:12px 6px">
+            <div class="lab" style="color:var(--gold,#C5A869);letter-spacing:0.1em">Instant UPI & QR Payment</div>
+            <h3 style="font-size:20px;margin:6px 0 12px">Google Pay · PhonePe · Paytm · BHIM</h3>
             
-            <div class="upi-qr-box" id="upi-qr-container">
-              <div style="width:160px;height:160px;margin:0 auto;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f8f6f1,#f0ede5);border-radius:10px;border:2px dashed var(--gold,#C5A869)">
-                <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
-                  <div style="width:32px;height:32px;border:3px solid var(--gold,#C5A869);border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite"></div>
-                  <div style="color:#888;font-size:11px;letter-spacing:0.05em">Generating QR…</div>
-                </div>
+            <div style="background:#fff;border:1px solid rgba(197,168,105,0.3);border-radius:8px;padding:20px;max-width:380px;margin:0 auto;box-shadow:0 4px 20px rgba(0,0,0,0.04)">
+              <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px">
+                <span style="font-weight:700;font-size:14px;color:#1A1B18">0% Gateway Fee</span>
+                <span style="background:rgba(197,168,105,0.15);color:#8a703b;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600">Instant Verification</span>
               </div>
-            </div>
-
-            <div class="lab" style="margin-top:16px">Or choose your preferred UPI app</div>
-            <div class="upi-app-buttons">
-              <div class="upi-app-btn" onclick="EcommerceStore.simulateUpiApp('Google Pay')"> Google Pay</div>
-              <div class="upi-app-btn" onclick="EcommerceStore.simulateUpiApp('PhonePe')"> PhonePe</div>
-              <div class="upi-app-btn" onclick="EcommerceStore.simulateUpiApp('Paytm')"> Paytm</div>
-              <div class="upi-app-btn" onclick="EcommerceStore.simulateUpiApp('BHIM')"> BHIM UPI</div>
-            </div>
-
-            <div style="margin-top:14px;display:flex;gap:8px">
-              <input id="upi-custom-vpa" placeholder="Enter UPI ID (e.g. name@okhdfcbank)" style="flex:1;padding:8px 12px;border:1px solid rgba(26,27,24,0.2);border-radius:3px">
-              <button class="btn on" style="padding:8px 14px;font-size:11px" onclick="EcommerceStore.verifyCustomVpa()">Verify</button>
+              <p style="font-size:13px;line-height:1.6;color:#585e52;margin-bottom:16px">
+                Click <strong>Confirm & Pay</strong> below. Razorpay will open with a dynamic, verified UPI QR code and instant app redirects for Google Pay, PhonePe, Paytm, and CRED.
+              </p>
+              <div style="font-size:11px;color:#888;border-top:1px dashed rgba(26,27,24,0.15);padding-top:10px">
+                UPI Direct Helpline: <strong style="color:#1A1B18">+91 8218359120</strong>
+              </div>
             </div>
           </div>
         `;
 
       case 'card':
         return `
-          <div>
-            <div class="lab">Credit or Debit Card</div>
-            <h3 style="font-size:18px;margin:4px 0 16px">Enter Card Details</h3>
+          <div style="padding:10px 4px">
+            <div class="lab" style="color:var(--gold,#C5A869);letter-spacing:0.1em">Credit & Debit Cards</div>
+            <h3 style="font-size:18px;margin:4px 0 14px">Visa · Mastercard · RuPay · Maestro</h3>
 
-            <!-- 3D Card Simulation -->
-            <div class="live-credit-card">
+            <div class="live-credit-card" style="margin-bottom:18px">
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <div class="card-chip"></div>
                 <div style="font-size:12px;letter-spacing:0.2em;color:var(--gold)">HILLSONWHEELS</div>
               </div>
-              <div class="card-number-display" id="card-num-disp">•••• •••• •••• ••••</div>
+              <div class="card-number-display">•••• •••• •••• ••••</div>
               <div style="display:flex;justify-content:space-between;font-size:11px;letter-spacing:0.1em;text-transform:uppercase">
                 <div>
                   <div style="opacity:0.6;font-size:9px">Cardholder</div>
-                  <div id="card-name-disp" style="font-weight:700">YOUR NAME</div>
+                  <div style="font-weight:700">${state.shippingAddress.fullName ? state.shippingAddress.fullName.toUpperCase() : 'VALUED CUSTOMER'}</div>
                 </div>
                 <div>
-                  <div style="opacity:0.6;font-size:9px">Expires</div>
-                  <div id="card-exp-disp" style="font-weight:700">MM/YY</div>
+                  <div style="opacity:0.6;font-size:9px">Security</div>
+                  <div style="font-weight:700">256-BIT SSL</div>
                 </div>
               </div>
             </div>
 
-            <div class="address-form-grid">
-              <div class="ecom-input-field full-width">
-                <label>Card Number *</label>
-                <input id="card-input-number" maxlength="19" placeholder="4532 •••• •••• ••••" oninput="EcommerceStore.formatCardNumber(this)">
-              </div>
-              <div class="ecom-input-field">
-                <label>Expiry Date (MM/YY) *</label>
-                <input id="card-input-exp" maxlength="5" placeholder="12/28" oninput="EcommerceStore.formatCardExpiry(this)">
-              </div>
-              <div class="ecom-input-field">
-                <label>CVV / CVC (3 Digits) *</label>
-                <input id="card-input-cvv" type="password" maxlength="4" placeholder="•••">
-              </div>
-              <div class="ecom-input-field full-width">
-                <label>Name on Card *</label>
-                <input id="card-input-name" placeholder="Name as printed on card" oninput="document.getElementById('card-name-disp').textContent = this.value.toUpperCase() || 'YOUR NAME'">
-              </div>
+            <div style="background:#fff;border:1px solid rgba(26,27,24,0.1);padding:14px;border-radius:6px;font-size:12.5px;color:#585e52;line-height:1.6">
+              Click <strong>Confirm & Pay</strong> below to enter your card details inside the bank-grade, PCI-DSS Level 1 certified Razorpay modal with 3D Secure OTP verification.
             </div>
           </div>
         `;
 
       case 'netbanking':
         return `
-          <div>
-            <div class="lab">Direct Bank Transfer</div>
-            <h3 style="font-size:18px;margin:4px 0 14px">Select Popular Bank</h3>
+          <div style="padding:10px 4px">
+            <div class="lab" style="color:var(--gold,#C5A869);letter-spacing:0.1em">Direct Bank Transfer</div>
+            <h3 style="font-size:18px;margin:4px 0 14px">Net Banking (50+ Indian Banks)</h3>
 
-            <div class="bank-quick-grid">
+            <div class="bank-quick-grid" style="margin-bottom:16px">
               ${['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra', 'Punjab National'].map((bank, i) => `
-                <div class="bank-option-btn ${i === 0 ? 'selected' : ''}" onclick="EcommerceStore.selectBank(this, '${bank}')">${bank}</div>
+                <div class="bank-option-btn ${i === 0 ? 'selected' : ''}" style="cursor:default">${bank}</div>
               `).join('')}
             </div>
 
-            <div class="ecom-input-field" style="margin-top:14px">
-              <label>Or search 50+ other Indian Banks</label>
-              <select style="width:100%">
-                <option>Bank of Baroda</option>
-                <option>Canara Bank</option>
-                <option>Union Bank of India</option>
-                <option>IndusInd Bank</option>
-                <option>IDFC FIRST Bank</option>
-                <option>Yes Bank</option>
-                <option>Federal Bank</option>
-              </select>
+            <div style="background:#fff;border:1px solid rgba(26,27,24,0.1);padding:14px;border-radius:6px;font-size:12.5px;color:#585e52;line-height:1.6">
+              Click <strong>Confirm & Pay</strong> below to select your bank and authenticate directly via your bank's secure netbanking portal.
             </div>
           </div>
         `;
@@ -1975,16 +1935,10 @@
   }
 
   /* Order Placement & Razorpay Payment */
+  /* Order Placement & Razorpay Payment */
   async function submitOrder() {
-    // Authentication requirement check
     if (!isLoggedIn()) {
       await checkCurrentUser();
-    }
-    if (!isLoggedIn()) {
-      showToast('Please sign in or create an account before placing your order.', 'error');
-      sessionStorage.setItem('hsw-auth-return', 'checkout');
-      window.go('login');
-      return;
     }
 
     // COD captcha check
@@ -1998,6 +1952,9 @@
 
     const btn = document.getElementById('place-order-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Connecting to Gateway…'; }
+
+    const userToken = localStorage.getItem('hsw_user_token') || '';
+    const authHeader = userToken ? { 'Authorization': `Bearer ${userToken}` } : {};
 
     const payload = {
       items: state.cart.map(item => ({ sku: item.sku, quantity: item.quantity })),
@@ -2015,17 +1972,13 @@
       const res = await fetch('/api/orders', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (res.status === 401 || (data && data.requireLogin)) {
-        showToast(data.error || 'Authentication required. Please sign in to place your order.', 'error');
-        sessionStorage.setItem('hsw-auth-return', 'checkout');
-        window.go('login');
-        if (btn) { btn.disabled = false; btn.textContent = 'Confirm & Pay'; }
-        return;
-      }
       if (!res.ok) throw new Error(data.error || 'Could not place order');
 
       state.lastOrder = data;
@@ -2040,7 +1993,7 @@
       finalizeOrderSuccess(data);
     } catch (err) {
       showToast(err.message, 'error');
-      if (btn) { btn.disabled = false; btn.textContent = 'Place Order'; }
+      if (btn) { btn.disabled = false; btn.textContent = `Confirm & Pay ₹${getTotal()} →`; }
     }
   }
 

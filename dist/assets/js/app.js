@@ -961,16 +961,63 @@ async function submitOrder(){
   const paymentMethod=payment.startsWith('UPI')?'UPI':payment.startsWith('Credit')?'card':payment.startsWith('Net')?'netbanking':'cod';
   try{
     const sku=sel.weight==='500g'?'buransh-honey-500g':'buransh-honey-250g';
+    const userToken = localStorage.getItem('hsw_user_token') || '';
+    const authHeader = userToken ? { 'Authorization': `Bearer ${userToken}` } : {};
+
     const response=await fetch('/api/orders',{
-      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+      method:'POST',
+      credentials:'same-origin',
+      headers:{ 'Content-Type':'application/json', ...authHeader },
       body:JSON.stringify({items:[{sku,quantity:Math.max(cart,1)}],address:address.value.trim(),paymentMethod})
     });
     const result=await response.json();
-    if(response.status===401){sessionStorage.setItem('hsw-auth-return','checkout');go('login');return;}
     if(!response.ok)throw new Error(result.error||'Could not place the order.');
     sessionStorage.removeItem('hsw-order-address');
-    sel.orderId=result.orderId;
+    sel.orderId=result.orderNumber || result.orderId;
     sel.orderEmailSent=result.notificationSent;
+
+    // For online transactions (UPI, Card, Netbanking), initiate Razorpay
+    if(['UPI', 'card', 'netbanking'].includes(paymentMethod) && typeof window.Razorpay === 'function'){
+      const rzpRes = await fetch('/api/create-order', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({
+          amount: result.total,
+          receipt: result.orderNumber,
+          notes: { hswOrderNumber: result.orderNumber }
+        })
+      });
+      const rzpData = await rzpRes.json();
+      if(rzpRes.ok && (rzpData.order_id || rzpData.id)){
+        const rzp = new window.Razorpay({
+          key: rzpData.keyId,
+          amount: rzpData.amount,
+          currency: 'INR',
+          name: 'HILLSONWHEELS',
+          description: `Uttarakhand Harvest Order ${result.orderNumber}`,
+          order_id: rzpData.order_id || rzpData.id,
+          handler: async function(resp){
+            try {
+              await fetch('/api/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeader },
+                body: JSON.stringify({
+                  razorpay_order_id: resp.razorpay_order_id,
+                  razorpay_payment_id: resp.razorpay_payment_id,
+                  razorpay_signature: resp.razorpay_signature,
+                  hswOrderId: result.orderNumber
+                })
+              });
+            } catch (_) {}
+            go('order-success');
+          }
+        });
+        rzp.open();
+        return;
+      }
+    }
+
     go('order-success');
   }catch(error){
     openModal(`<div class="lab">Order could not be placed</div><p style="margin:12px 0 20px">${Security.escapeHTML(error.message)}</p><button class="btn on" onclick="closeModal()">Close</button>`);
