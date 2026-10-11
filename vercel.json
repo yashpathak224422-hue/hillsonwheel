@@ -4,8 +4,8 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "source": "/api/:match*",
+      "destination": "https://hillsonwheels-api.onrender.com/api/:match*"
     },
     {
       "source": "/vendor-admin",
