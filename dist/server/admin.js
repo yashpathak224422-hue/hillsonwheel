@@ -74,7 +74,7 @@ function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, s
   /* ==========================================================================
      DASHBOARD ANALYTICS
      ========================================================================== */
-  router.get('/stats', requireAdmin, async (req, res) => {
+  router.get(['/stats', '/metrics'], requireAdmin, async (req, res) => {
     try {
       let allOrders = [];
       try {

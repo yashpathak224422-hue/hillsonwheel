@@ -1,7 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { minify } = require('terser');
-const JavaScriptObfuscator = require('javascript-obfuscator');
+let JavaScriptObfuscator = null;
+try {
+  JavaScriptObfuscator = require('javascript-obfuscator');
+} catch (_) {}
 const { minify: htmlMinify } = require('html-minifier-terser');
 const CleanCSS = require('clean-css');
 
@@ -77,7 +80,7 @@ function minifyCSS(filePath) {
 async function obfuscateJS(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
   
-  if (isProduction) {
+  if (isProduction && JavaScriptObfuscator) {
     // Production: Full obfuscation
     const obfuscationResult = JavaScriptObfuscator.obfuscate(content, {
       compact: true,

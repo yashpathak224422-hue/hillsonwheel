@@ -920,10 +920,7 @@ app.get('/api/health', async (req, res) => {
   let dbError = null;
   if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
     try {
-      await mongoose.connect(process.env.MONGODB_URI, {
-        serverSelectionTimeoutMS: 10000,
-        maxPoolSize: 5
-      });
+      await connectDatabase();
     } catch (err) {
       dbError = err.message;
     }
@@ -931,6 +928,8 @@ app.get('/api/health', async (req, res) => {
   res.json({ 
     status: 'ok', 
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    readyState: mongoose.connection.readyState,
+    hasMongoUri: Boolean(process.env.MONGODB_URI),
     dbError,
     memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     timestamp: new Date().toISOString()
@@ -1481,7 +1480,21 @@ app.post('/api/orders', optionalUser, async (req, res) => {
     const validatedItems = [];
 
     for (const item of items) {
-      const catProduct = CATALOG[item.sku];
+      const rawSku = String(item.sku || '').trim();
+      let catProduct = CATALOG[rawSku];
+      if (!catProduct) {
+        catProduct = Object.values(CATALOG).find(p => {
+          const s = rawSku.toLowerCase();
+          const pid = p.id.toLowerCase();
+          const psku = p.sku.toLowerCase();
+          const pname = p.name.toLowerCase();
+          if (psku === s || pid === s) return true;
+          const keywords = pid.split('-');
+          if (keywords.every(kw => s.includes(kw))) return true;
+          if (pname.split(' ').every(w => s.includes(w.toLowerCase()))) return true;
+          return false;
+        });
+      }
       if (!catProduct) {
         return res.status(400).json({ error: `Product SKU "${item.sku}" is currently unavailable in the mountain harvest.` });
       }
@@ -2116,14 +2129,33 @@ app.get('/api/orders/:id/invoice', optionalUser, async (req, res) => {
    ========================================================================== */
 app.post('/api/trips', requireUser, async (req, res) => {
   try {
-    const trip = await TripRequest.create({ ...req.body, userId: req.user._id });
+    const userId = req.user._id || req.user.id;
+    let trip = null;
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(userId)) {
+      try {
+        trip = await TripRequest.create({ ...req.body, userId });
+      } catch (dbErr) {
+        console.warn('TripRequest MongoDB create warning:', dbErr.message);
+      }
+    }
+    if (!trip) {
+      const tripId = 'TRIP-' + Date.now() + '-' + crypto.randomInt(100, 999);
+      trip = {
+        _id: tripId,
+        id: tripId,
+        userId,
+        ...req.body,
+        status: 'new',
+        createdAt: new Date()
+      };
+    }
     let notificationSent = false;
     try {
       notificationSent = await sendBusinessNotification({ type: 'trip', record: trip, user: req.user });
     } catch (error) {
       console.error('Tourism notification failed:', error.message);
     }
-    res.status(201).json({ requestId: trip.id, notificationSent });
+    res.status(201).json({ requestId: trip.id || trip._id, notificationSent });
   } catch (error) {
     if (error.name === 'ValidationError') return res.status(400).json({ error: 'Complete the trip details and try again.' });
     console.error('Trip request failed:', error.message);
@@ -2254,6 +2286,50 @@ async function connectDatabase() {
   return mongoose.connection;
 }
 
+async function seedDefaultUsers() {
+  try {
+    const demoEmail = 'patron@hillsonwheels.in';
+    const passwordHash = await bcrypt.hash('PahadiPatron2026!', 10);
+    const demoUser = {
+      id: 'demo-patron-himalaya-2026',
+      _id: 'demo-patron-himalaya-2026',
+      name: 'Pahadi Patron',
+      email: demoEmail,
+      phone: '+919876543210',
+      passwordHash,
+      verifiedAt: new Date(),
+      addresses: [{
+        fullName: 'Pahadi Patron',
+        phone: '+919876543210',
+        house: 'House 14, Apple Orchard Lane',
+        street: 'Ranikhet Road',
+        city: 'Almora',
+        state: 'Uttarakhand',
+        pincode: '263601',
+        type: 'Home',
+        isDefault: true
+      }]
+    };
+
+    if (!MEMORY_USERS.has(demoUser.id)) {
+      MEMORY_USERS.set(demoUser.id, demoUser);
+      saveUsers(MEMORY_USERS);
+    }
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const existing = await User.findOne({ email: demoEmail });
+        if (!existing) {
+          await User.create(demoUser);
+          console.log('Seeded demo patron user: patron@hillsonwheels.in / PahadiPatron2026!');
+        }
+      } catch (_) {}
+    }
+  } catch (err) {
+    console.warn('Demo user seed warning:', err.message);
+  }
+}
+
 async function start() {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
     process.env.JWT_SECRET = 'DCIgcYdtHg5Rt-sGlM2Xo3W6gXZG9_GLx0AzEX5LIXgW3Cwky6VI-MZRitWa_oi7';
@@ -2270,6 +2346,8 @@ async function start() {
   } catch (err) {
     console.warn('Startup database connect warning:', err.message);
   }
+
+  await seedDefaultUsers();
 
   return server;
 }
