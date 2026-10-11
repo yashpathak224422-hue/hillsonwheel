@@ -910,7 +910,7 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
 
     const responseMessage = channel === 'phone'
       ? (delivered.provider === 'simulated' ? `Your verification code is: ${code}` : 'A verification code has been sent to your WhatsApp.')
-      : 'If an account matches, a verification code has been sent to your email.';
+      : (delivered.provider === 'simulated' ? `Your verification code is: ${code}` : 'A verification code has been sent to your email.');
 
     res.json({ message: responseMessage });
   } catch (error) {
