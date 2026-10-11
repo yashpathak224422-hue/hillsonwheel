@@ -1433,54 +1433,35 @@ function open_(){
   cur = 'open';
   clearIntroTimers();
 
-  $('#app').innerHTML = `
-    <div onclick="skipIntro()" style="height:100%;display:grid;place-items:center;text-align:center;position:relative;cursor:pointer;user-select:none">
-      <svg viewBox="0 0 400 200" style="width:min(80vw,520px);filter:drop-shadow(0 0 20px rgba(197,168,105,0.25))">
-        <path id="mt" d="M10 170L90 110 140 130 200 40 250 100 290 80 390 170" fill="none" stroke="#C5A869" stroke-width="1.4" stroke-dasharray="700" stroke-dashoffset="700" style="animation:dr 1.4s cubic-bezier(0.4, 0, 0.2, 1) forwards"/>
-      </svg>
-      <div style="position:absolute;bottom:14vh;width:100%;opacity:0;animation:fadeSub 1.2s 0.6s forwards">
-        <p class="lab" style="letter-spacing:0.35em;font-size:11px;color:rgba(197,168,105,0.85)">ENTERING UTTARAKHAND</p>
-      </div>
-    </div>
-    <style>
-      @keyframes dr{to{stroke-dashoffset:0}}
-      @keyframes fadeSub{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-    </style>
-  `;
+  $('#app').innerHTML = `<div onclick="skipIntro()" style="height:100%;display:grid;place-items:center;text-align:center;position:relative;cursor:pointer"><svg viewBox="0 0 400 200" style="width:min(80vw,520px)"><path id="mt" d="M10 170L90 110 140 130 200 40 250 100 290 80 390 170" fill="none" stroke="#C5A869" stroke-width="1.2" stroke-dasharray="700" stroke-dashoffset="700" style="animation:dr 5s ease forwards"/></svg></div><style>@keyframes dr{to{stroke-dashoffset:0}}</style>`;
 
   introTimer1 = setTimeout(() => {
     reveal();
-  }, 1500);
+  }, 5000);
 }
 
 function reveal(){
   clearIntroTimers();
-  const w = ['forests', 'rivers', 'villages', 'harvest', 'craft', 'people', 'temples', 'journeys'];
-  $('#app').innerHTML = `
-    <div onclick="skipIntro()" style="height:100%;display:grid;place-items:center;text-align:center;cursor:pointer;user-select:none">
-      <div style="animation:fadeSub 0.8s ease forwards">
-        <div class="lab" id="w" style="height:20px;margin-bottom:32px;letter-spacing:0.32em;color:var(--gold,#C5A869)">journeys</div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:12px">
-          <h1 class="rv" style="letter-spacing:0.32em;font-size:clamp(28px,6vw,76px);display:inline-block;animation:fadeSub 1s ease forwards">HILLSONWHEELS</h1>
-        </div>
-        <p class="lab rv" style="margin:16px 0 0;letter-spacing:0.35em;animation:fadeSub 1.2s 0.3s forwards">The world of Uttarakhand</p>
-      </div>
-    </div>
-  `;
+  const w = ['forests', 'rivers', 'villages', 'food', 'craft', 'people', 'temples', 'roads', 'journeys'];
+  $('#app').innerHTML = `<div onclick="skipIntro()" style="height:100%;display:grid;place-items:center;text-align:center;cursor:pointer"><div><div class="lab" id="w" style="height:20px;margin-bottom:36px;letter-spacing:.32em"></div><div style="display:flex;align-items:center;justify-content:center;gap:12px"><h1 class="rv" style="letter-spacing:.32em;font-size:clamp(28px,6vw,76px);animation-delay:2.8s;display:inline-block">HILLSONWHEELS</h1></div><p class="lab rv" style="margin:16px 0 40px;letter-spacing:.35em;animation-delay:3.5s">The world of Uttarakhand</p></div></div>`;
 
   let i = 0;
   introInterval = setInterval(() => {
+    if (i >= w.length) {
+      if (introInterval) clearInterval(introInterval);
+      return;
+    }
     const word = $('#w');
-    if (!word || i >= w.length) {
+    if (!word) {
       if (introInterval) clearInterval(introInterval);
       return;
     }
     word.textContent = w[i++];
-  }, 160);
+  }, 300);
 
   introTimer2 = setTimeout(() => {
     skipIntro();
-  }, 1600);
+  }, 4500);
 }
 
 function skipIntro() {
