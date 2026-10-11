@@ -166,11 +166,20 @@ async function build() {
     console.log(`✓ ${isProduction ? 'Obfuscated' : 'Minified'}: ${file}`);
   }
 
-  // Copy server files as-is if present
-  const srcServerDir = path.join(SOURCE_DIR, 'server');
-  const serverDir = path.join(DIST_DIR, 'server');
-  if (fs.existsSync(srcServerDir) && !fs.existsSync(serverDir)) {
-    copyDirectory(srcServerDir, serverDir);
+  // Create static route aliases for admin panel
+  const adminPanelSrc = path.join(DIST_DIR, 'admin-panel.html');
+  if (fs.existsSync(adminPanelSrc)) {
+    fs.copyFileSync(adminPanelSrc, path.join(DIST_DIR, 'vendor-admin.html'));
+    fs.copyFileSync(adminPanelSrc, path.join(DIST_DIR, 'admin.html'));
+
+    const vendorAdminFolder = path.join(DIST_DIR, 'vendor-admin');
+    if (!fs.existsSync(vendorAdminFolder)) fs.mkdirSync(vendorAdminFolder, { recursive: true });
+    fs.copyFileSync(adminPanelSrc, path.join(vendorAdminFolder, 'index.html'));
+
+    const adminFolder = path.join(DIST_DIR, 'admin');
+    if (!fs.existsSync(adminFolder)) fs.mkdirSync(adminFolder, { recursive: true });
+    fs.copyFileSync(adminPanelSrc, path.join(adminFolder, 'index.html'));
+    console.log('✓ Created admin panel routes: /vendor-admin, /admin, and /admin-panel');
   }
 
   console.log(`\nBuild complete! Output in ${DIST_DIR}/`);

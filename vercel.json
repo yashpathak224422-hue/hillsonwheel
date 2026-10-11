@@ -9,7 +9,19 @@
     },
     {
       "source": "/vendor-admin",
-      "destination": "/admin-panel.html"
+      "destination": "/vendor-admin/index.html"
+    },
+    {
+      "source": "/vendor-admin/(.*)",
+      "destination": "/vendor-admin/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/admin/(.*)",
+      "destination": "/admin/index.html"
     }
   ],
   "headers": [
