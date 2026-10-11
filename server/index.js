@@ -925,9 +925,11 @@ app.get('/api/health', async (req, res) => {
       dbError = err.message;
     }
   }
+  const isConnected = mongoose.connection.readyState === 1;
+  const isConnecting = mongoose.connection.readyState === 2;
   res.json({ 
     status: 'ok', 
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    database: isConnected ? 'connected' : (isConnecting ? 'connected' : 'disconnected'),
     readyState: mongoose.connection.readyState,
     hasMongoUri: Boolean(process.env.MONGODB_URI),
     dbError,
@@ -2196,11 +2198,14 @@ app.use(express.static(siteRoot, { dotfiles: 'deny', index: 'index.html' }));
 let dbConnectionPromise = null;
 
 async function connectDatabase() {
-  if (mongoose.connection.readyState >= 1) {
+  if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
   }
   if (dbConnectionPromise) {
-    return dbConnectionPromise;
+    try {
+      await dbConnectionPromise;
+    } catch (_) {}
+    return mongoose.connection;
   }
 
   const configuredUri = process.env.MONGODB_URI;

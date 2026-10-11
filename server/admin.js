@@ -115,6 +115,7 @@ function createAdminRouter({ Order, User, TripRequest, CATALOG, JOURNEYS = {}, s
 
       res.json({
         totalRevenue,
+        revenue: totalRevenue,
         totalOrders,
         pendingOrders,
         inTransitOrders,
