@@ -938,6 +938,64 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+app.get('/api/diagnostics/smtp', async (req, res) => {
+  const nodemailer = require('nodemailer');
+  const results = {
+    smtpUser: process.env.SMTP_USER || null,
+    hasPassword: Boolean(process.env.SMTP_PASSWORD),
+    configuredHost: process.env.SMTP_HOST || null,
+    configuredPort: process.env.SMTP_PORT || null
+  };
+  try {
+    const t1 = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+      connectionTimeout: 6000
+    });
+    await t1.verify();
+    results.serviceGmail = 'CONNECTED';
+  } catch (err) {
+    results.serviceGmail = err.message;
+  }
+  try {
+    const t2 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+      connectionTimeout: 6000
+    });
+    await t2.verify();
+    results.port587 = 'CONNECTED';
+  } catch (err) {
+    results.port587 = err.message;
+  }
+  try {
+    const t3 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+      connectionTimeout: 6000
+    });
+    await t3.verify();
+    results.port465 = 'CONNECTED';
+  } catch (err) {
+    results.port465 = err.message;
+  }
+  res.json(results);
+});
+
+app.get('/api/diagnostics/db', async (req, res) => {
+  const uri = process.env.MONGODB_URI;
+  try {
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 6000 });
+    res.json({ status: 'CONNECTED', readyState: mongoose.connection.readyState });
+  } catch (err) {
+    res.json({ status: 'FAILED', error: err.message });
+  }
+});
+
 // Security audit endpoint (protected)
 app.get('/api/admin/security-audit', requireUser, (req, res) => {
   // In production, this should be restricted to admin users only
@@ -1231,10 +1289,14 @@ app.post('/api/auth/password/reset', authLimiter, async (req, res) => {
   }
 });
 
-app.get('/api/auth/me', requireUser, (req, res) => {
+app.get('/api/auth/me', optionalUser, (req, res) => {
+  if (!req.user) {
+    return res.json({ authenticated: false, user: null });
+  }
   res.json({
+    authenticated: true,
     user: {
-      id: req.user.id,
+      id: req.user.id || req.user._id,
       name: req.user.name,
       email: req.user.email,
       phone: req.user.phone,

@@ -13,7 +13,22 @@ function hasSmtpConfig() {
 
 function createTransport() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = Number(process.env.SMTP_PORT || (host === 'smtp.gmail.com' ? 465 : 587));
+  const isGmail = host === 'smtp.gmail.com' || (process.env.SMTP_USER && process.env.SMTP_USER.includes('@gmail.com'));
+
+  if (isGmail) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD
+      },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000
+    });
+  }
+
+  const port = Number(process.env.SMTP_PORT || 587);
   const isSecure = process.env.SMTP_SECURE === 'true' || port === 465;
 
   return nodemailer.createTransport({

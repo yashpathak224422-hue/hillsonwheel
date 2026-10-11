@@ -440,7 +440,7 @@
   async function checkCurrentUser() {
     try {
       const userToken = localStorage.getItem('hsw_user_token') || '';
-      if (!userToken && !document.cookie.includes('hsw_token')) {
+      if (!userToken && !document.cookie.includes('hsw_token') && !document.cookie.includes('hsw_session')) {
         state.currentUser = null;
         return null;
       }
@@ -450,6 +450,10 @@
       });
       if (res.ok) {
         const data = await res.json();
+        if (!data || !data.user) {
+          state.currentUser = null;
+          return null;
+        }
         state.currentUser = data.user;
         if (window.setAccountUser && !window.accountUser) {
           window.accountUser = data.user;
@@ -463,6 +467,9 @@
         }
         return data.user;
       } else {
+        if (res.status === 401) {
+          try { localStorage.removeItem('hsw_user_token'); } catch (_) {}
+        }
         state.currentUser = null;
         return null;
       }
@@ -2643,14 +2650,20 @@
   async function loadProfileData() {
     try {
       const userToken = localStorage.getItem('hsw_user_token') || '';
-      if (!userToken && !document.cookie.includes('hsw_token')) return;
+      if (!userToken && !document.cookie.includes('hsw_token') && !document.cookie.includes('hsw_session')) return;
       const res = await fetch('/api/auth/me', {
         headers: userToken ? { 'Authorization': `Bearer ${userToken}` } : {},
         credentials: 'same-origin'
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (res.status === 401) {
+          try { localStorage.removeItem('hsw_user_token'); } catch (_) {}
+        }
+        return;
+      }
       const data = await res.json();
-      const u = data.user;
+      const u = data && data.user;
+      if (!u) return;
       if (document.getElementById('prof-name')) document.getElementById('prof-name').value = u.name || '';
       if (document.getElementById('prof-email')) document.getElementById('prof-email').value = u.email || '';
       if (document.getElementById('prof-phone')) document.getElementById('prof-phone').value = u.phone || '';
