@@ -20,7 +20,10 @@ function createTransport() {
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASSWORD
-      }
+      },
+      connectionTimeout: 3000,
+      greetingTimeout: 3000,
+      socketTimeout: 3500
     });
   }
 
@@ -36,6 +39,9 @@ function createTransport() {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD
     },
+    connectionTimeout: 3000,
+    greetingTimeout: 3000,
+    socketTimeout: 3500,
     tls: {
       rejectUnauthorized: false
     }
@@ -43,6 +49,33 @@ function createTransport() {
 }
 
 async function sendEmail({ to, subject, html, text, attachments }) {
+  // 1. Blazing fast HTTPS delivery via Resend (if configured)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const resendRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || 'HILLSONWHEELS <onboarding@resend.dev>',
+          to: [to],
+          subject,
+          html,
+          text
+        })
+      });
+      if (resendRes.ok) {
+        console.log(`[RESEND SUCCESS] Email delivered to ${to}`);
+        return true;
+      }
+    } catch (resendErr) {
+      console.error('[RESEND ERROR]', resendErr.message);
+    }
+  }
+
+  // 2. SMTP with strict 3.5-second timeout race
   if (!hasSmtpConfig()) {
     console.warn('[SMTP WARNING] SMTP credentials not set or incomplete.');
     return false;
@@ -50,14 +83,23 @@ async function sendEmail({ to, subject, html, text, attachments }) {
   try {
     const transport = createTransport();
     const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || 'howsmailbox@gmail.com';
-    const info = await transport.sendMail({
-      from: `"HILLSONWHEELS" <${fromAddress}>`,
-      to,
-      subject,
-      html,
-      text: text || subject,
-      attachments: attachments || []
-    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SMTP connection timed out')), 3500)
+    );
+
+    const info = await Promise.race([
+      transport.sendMail({
+        from: `"HILLSONWHEELS" <${fromAddress}>`,
+        to,
+        subject,
+        html,
+        text: text || subject,
+        attachments: attachments || []
+      }),
+      timeoutPromise
+    ]);
+
     console.log(`[SMTP SUCCESS] Email delivered to ${to} (MessageId: ${info.messageId})`);
     return true;
   } catch (err) {
