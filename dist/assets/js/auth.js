@@ -165,17 +165,6 @@
     }
   }
 
-  function fillPatron() {
-    state.channel = 'email';
-    state.mode = 'login';
-    state.method = 'password';
-    state.identifier = 'patron@hillsonwheels.in';
-    window.go('login', 1);
-    setTimeout(() => {
-      const pass = document.getElementById('auth-password');
-      if (pass) pass.value = 'PahadiPatron2026!';
-    }, 50);
-  }
 
   document.addEventListener('submit', submit);
   window.AccountAuth = { render };
