@@ -56,9 +56,6 @@
       </form>
       <div class="auth-links">
         ${mode === 'login' ? `<button type="button" onclick="authSetMode('signup')">Create an account</button><button type="button" onclick="authSetMode('forgot')">Forgot password?</button>${state.method === 'password' ? `<button type="button" onclick="authSetMethod('otp')">Sign in with a code</button>` : `<button type="button" onclick="authSetMethod('password')">Use password instead</button>`}` : `<button type="button" onclick="authSetMode('login')">Back to sign in</button>`}
-      </div>
-      <div style="margin-top:16px;padding:10px 14px;background:rgba(197,168,105,0.08);border:1px dashed var(--gold,#C5A869);border-radius:4px;font-size:11.5px;color:#52584d;text-align:center">
-        Demo Patron: <strong style="cursor:pointer;color:#1A1B18;text-decoration:underline" onclick="authFillPatron()">patron@hillsonwheels.in</strong> · Password: <strong style="color:#1A1B18">PahadiPatron2026!</strong>
       </div>`;
   }
 
@@ -186,5 +183,4 @@
   window.authSetChannel = setChannel;
   window.authSetMethod = setMethod;
   window.authSendCode = requestCode;
-  window.authFillPatron = fillPatron;
 })(window);

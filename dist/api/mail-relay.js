@@ -2,6 +2,7 @@
 const nodemailer = require('nodemailer');
 
 const INTERNAL_SECRET = process.env.JWT_SECRET || 'DCIgcYdtHg5Rt-sGlM2Xo3W6gXZG9_GLx0AzEX5LIXgW3Cwky6VI-MZRitWa_oi7';
+globalThis._recentDispatches = globalThis._recentDispatches || [];
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,7 +14,12 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    return res.status(200).json({ status: 'ok', service: 'mail-relay', timestamp: new Date().toISOString() });
+    return res.status(200).json({
+      status: 'ok',
+      service: 'mail-relay',
+      timestamp: new Date().toISOString(),
+      recentDispatches: (globalThis._recentDispatches || []).slice(0, 20)
+    });
   }
 
   if (req.method !== 'POST') {
@@ -55,12 +61,22 @@ module.exports = async (req, res) => {
 
     const info = await transporter465.sendMail({
       from: `"HILLSONWHEELS" <${user}>`,
+      replyTo: user,
       to,
       subject,
       html,
       text: text || subject,
       attachments: attachments || []
     });
+
+    globalThis._recentDispatches.unshift({
+      to,
+      subject,
+      port: 465,
+      messageId: info.messageId,
+      timestamp: new Date().toISOString()
+    });
+    if (globalThis._recentDispatches.length > 30) globalThis._recentDispatches.pop();
 
     return res.status(200).json({ success: true, messageId: info.messageId, port: 465 });
   } catch (err465) {
@@ -79,12 +95,22 @@ module.exports = async (req, res) => {
 
       const info = await transporter587.sendMail({
         from: `"HILLSONWHEELS" <${user}>`,
+        replyTo: user,
         to,
         subject,
         html,
         text: text || subject,
         attachments: attachments || []
       });
+
+      globalThis._recentDispatches.unshift({
+        to,
+        subject,
+        port: 587,
+        messageId: info.messageId,
+        timestamp: new Date().toISOString()
+      });
+      if (globalThis._recentDispatches.length > 30) globalThis._recentDispatches.pop();
 
       return res.status(200).json({ success: true, messageId: info.messageId, port: 587 });
     } catch (err587) {
