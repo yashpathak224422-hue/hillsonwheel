@@ -20,7 +20,7 @@
     const description = mode === 'signup'
       ? 'Save your orders and journeys through Uttarakhand.'
       : mode === 'forgot' ? 'Verify your account to choose a new password.' : 'Continue your mountain journey.';
-    const codeFlow = mode === 'forgot' || state.method === 'otp' || mode === 'signup';
+    const codeFlow = mode === 'forgot' || state.method === 'otp';
     const channelTabs = `<div class="auth-tabs" role="group" aria-label="Account identifier">
       <button type="button" class="${state.channel === 'email' ? 'on' : ''}" onclick="authSetChannel('email')">Email</button>
       <button type="button" class="${state.channel === 'phone' ? 'on' : ''}" onclick="authSetChannel('phone')">Phone</button>
