@@ -1013,36 +1013,29 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
 
 app.get('/api/diagnostics/db', async (req, res) => {
   const uri = process.env.MONGODB_URI;
-  try {
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 6000 });
-    res.json({ status: 'CONNECTED', readyState: mongoose.connection.readyState });
-  } catch (err) {
-    res.json({ status: 'FAILED', error: err.message });
+  if (!uri) {
+    return res.json({ status: 'FAILED', error: 'MONGODB_URI is not set in environment variables' });
   }
-});
-
-app.get('/api/diagnostics/send-test-email', async (req, res) => {
-  const targetEmail = req.query.to || process.env.SMTP_USER || 'howsmailbox@gmail.com';
+  const maskedUri = uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
   try {
-    const success = await sendEmail({
-      to: targetEmail,
-      subject: 'HILLSONWHEELS Live Cloud Delivery Verification',
-      text: 'Delivery verification test from HILLSONWHEELS backend to confirmed recipient inbox.',
-      html: '<p>This is a test confirming that live cloud notifications and OTP delivery are working directly from hosting.</p>'
+    if (mongoose.connection.readyState !== 0) {
+      try { await mongoose.disconnect(); } catch (_) {}
+    }
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
+    res.json({
+      status: 'CONNECTED',
+      readyState: mongoose.connection.readyState,
+      uri: maskedUri
     });
-    res.json({ success, recipient: targetEmail, timestamp: new Date().toISOString() });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.json({
+      status: 'FAILED',
+      error: err.message,
+      name: err.name,
+      code: err.code,
+      uri: maskedUri
+    });
   }
-});
-
-// Security audit endpoint (protected)
-app.get('/api/admin/security-audit', requireUser, (req, res) => {
-  // In production, this should be restricted to admin users only
-  res.json({ 
-    auditLog: securityAuditLog.slice(-100), // Last 100 entries
-    totalEvents: securityAuditLog.length
-  });
 });
 
 app.get('/api/catalog', (req, res) => res.json(Object.values(CATALOG).filter(p => p.isAvailable !== false)));
