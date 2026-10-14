@@ -1,3 +1,11 @@
+// Pre-warm backend API to prevent cold start latency
+(function prewarmBackend() {
+  try {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const healthUrl = isLocal ? 'http://localhost:5000/api/health' : '/api/health';
+    fetch(healthUrl, { cache: 'no-store' }).catch(() => {});
+  } catch (_) {}
+})();
 
 const PHOTO={
   hero:'./assets/images/local/hero-banner.png',
