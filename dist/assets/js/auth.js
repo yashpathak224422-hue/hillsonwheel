@@ -94,6 +94,11 @@
     const purpose = state.mode === 'signup' ? 'signup' : state.mode === 'forgot' ? 'reset' : 'login';
     const message = document.getElementById('auth-message');
     message.textContent = 'Sending verification code…';
+    const wakeTimer = setTimeout(() => {
+      if (message && message.textContent.includes('Sending')) {
+        message.textContent = 'Connecting to secure server, please wait a moment…';
+      }
+    }, 3500);
 
     try {
       const response = await fetch('/api/auth/otp/request', {
@@ -116,6 +121,8 @@
     } catch (error) {
       state.notice = error.message;
       message.textContent = state.notice;
+    } finally {
+      clearTimeout(wakeTimer);
     }
   }
 
@@ -129,6 +136,11 @@
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     message.textContent = 'Please wait…';
+    const wakeTimer2 = setTimeout(() => {
+      if (message && message.textContent.includes('Please wait')) {
+        message.textContent = 'Connecting to secure server, please wait a moment…';
+      }
+    }, 3500);
 
     const payload = {
       identifier: state.identifier,
@@ -162,6 +174,8 @@
     } catch (error) {
       message.textContent = error.message;
       button.disabled = false;
+    } finally {
+      clearTimeout(wakeTimer2);
     }
   }
 
