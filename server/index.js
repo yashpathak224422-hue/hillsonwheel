@@ -1011,6 +1011,21 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
   res.json(results);
 });
 
+app.get('/api/diagnostics/send-email', async (req, res) => {
+  const to = req.query.to || 'digitrastudio@gmail.com';
+  try {
+    const success = await sendEmail({
+      to,
+      subject: 'HILLSONWHEELS Live Delivery Test',
+      text: 'This is a live test notification confirming delivery to ' + to,
+      html: '<p>This is a live test notification confirming delivery to ' + to + '</p>'
+    });
+    res.json({ success, recipient: to, timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/diagnostics/db', async (req, res) => {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
@@ -1102,6 +1117,12 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
         });
       }
       return res.json({ message: 'A verification code has been sent to your WhatsApp / mobile number.' });
+    }
+
+    if (!delivered) {
+      return res.status(503).json({
+        error: 'Email delivery service could not send the verification code. Please check mail credentials or try again shortly.'
+      });
     }
 
     res.json({ message: `Verification code sent to ${identity.value}. Please check your inbox and spam folder.` });
