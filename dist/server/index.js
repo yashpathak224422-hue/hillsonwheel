@@ -2486,6 +2486,37 @@ async function seedDefaultUsers() {
       }]
     };
 
+    const digiPasswordHash = await bcrypt.hash('DigitraPatron2026!', 10);
+    const digiUser = {
+      id: 'user-digitra-studio-primary',
+      _id: 'user-digitra-studio-primary',
+      name: 'Digitra Studio Patron',
+      email: 'digitrastudio@gmail.com',
+      phone: '+919876543210',
+      passwordHash: digiPasswordHash,
+      verifiedAt: new Date(),
+      addresses: [{
+        fullName: 'Digitra Studio',
+        phone: '+919876543210',
+        house: 'Studio 1',
+        street: 'Mall Road',
+        city: 'Nainital',
+        state: 'Uttarakhand',
+        pincode: '263001',
+        type: 'Office',
+        isDefault: true
+      }]
+    };
+    if (!MEMORY_USERS.has(digiUser.id)) {
+      MEMORY_USERS.set(digiUser.id, digiUser);
+    }
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const existDigi = await User.findOne({ email: 'digitrastudio@gmail.com' });
+        if (!existDigi) await User.create(digiUser);
+      } catch (_) {}
+    }
+
     if (!MEMORY_USERS.has(demoUser.id)) {
       MEMORY_USERS.set(demoUser.id, demoUser);
       saveUsers(MEMORY_USERS);
