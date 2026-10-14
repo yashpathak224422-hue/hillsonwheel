@@ -941,7 +941,7 @@ app.get('/api/health', async (req, res) => {
     database: isConnected ? 'connected' : (isConnecting ? 'connected' : 'disconnected'),
     readyState: mongoose.connection.readyState,
     hasMongoUri: Boolean(process.env.MONGODB_URI),
-    dbError,
+    dbError: dbError || lastMongoError,
     memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     timestamp: new Date().toISOString()
   });
@@ -2349,6 +2349,7 @@ express.static.mime.define({'audio/mp4': ['m4a']});
 app.use(express.static(siteRoot, { dotfiles: 'deny', index: 'index.html' }));
 
 let dbConnectionPromise = null;
+let lastMongoError = null;
 
 async function connectDatabase() {
   if (mongoose.connection.readyState === 1) {
@@ -2378,6 +2379,7 @@ async function connectDatabase() {
       return mongoose.connection;
     } catch (error) {
       console.error('MongoDB Atlas initial connection warning:', error.message);
+      lastMongoError = error.message;
       dbConnectionPromise = null;
     }
   }
