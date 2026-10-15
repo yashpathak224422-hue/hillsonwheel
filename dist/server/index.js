@@ -1220,6 +1220,11 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   }
 });
 
+// Friendly browser redirect if user pastes or visits login API route in address bar
+app.get(['/api/auth/login', '/api/auth/register', '/login'], (req, res) => {
+  res.redirect('https://www.hillsonwheels.com/#login');
+});
+
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { channel, identifier, password } = req.body;
