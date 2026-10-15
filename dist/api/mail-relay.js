@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
   }
 
   const user = process.env.SMTP_USER || 'howsmailbox@gmail.com';
-  const pass = process.env.SMTP_PASSWORD || 'dblscnqahnphuzhj';
+  const pass = process.env.SMTP_PASSWORD || 'nscxzaacfqgrksdb';
 
   // 1. Blazing fast HTTPS delivery via Resend (if configured)
   if (process.env.RESEND_API_KEY) {
