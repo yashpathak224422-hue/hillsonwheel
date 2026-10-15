@@ -1,17 +1,17 @@
-name: Keep Render Backend Awake
+name: Render Backend 24/7 Keep-Alive
 
 on:
   schedule:
-    # Ping every 10 minutes to prevent Render free-tier from sleeping (15 min inactivity limit)
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
   ping:
+    name: Ping Render Backend
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     steps:
-      - name: Ping Render Health Check
+      - name: Ping /api/health
         run: |
-          echo "Pinging HILLSONWHEELS backend to keep service warm..."
-          curl -s -f -m 60 "https://hillsonwheels-api.onrender.com/api/health" || echo "Ping dispatched"
+          echo "Pinging Render backend at $(date)..."
+          curl -f -s -S --max-time 30 https://hillsonwheels-api.onrender.com/api/health || true

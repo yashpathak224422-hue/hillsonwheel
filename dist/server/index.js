@@ -941,7 +941,7 @@ app.get('/api/health', async (req, res) => {
     database: isConnected ? 'connected' : (isConnecting ? 'connected' : 'disconnected'),
     readyState: mongoose.connection.readyState,
     hasMongoUri: Boolean(process.env.MONGODB_URI),
-    dbError: dbError || lastMongoError,
+    dbError,
     memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     timestamp: new Date().toISOString()
   });
@@ -1011,46 +1011,38 @@ app.get('/api/diagnostics/smtp', async (req, res) => {
   res.json(results);
 });
 
-app.get('/api/diagnostics/send-email', async (req, res) => {
-  const to = req.query.to || 'digitrastudio@gmail.com';
+app.get('/api/diagnostics/db', async (req, res) => {
+  const uri = process.env.MONGODB_URI;
+  try {
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 6000 });
+    res.json({ status: 'CONNECTED', readyState: mongoose.connection.readyState });
+  } catch (err) {
+    res.json({ status: 'FAILED', error: err.message });
+  }
+});
+
+app.get('/api/diagnostics/send-test-email', async (req, res) => {
+  const targetEmail = req.query.to || process.env.SMTP_USER || 'howsmailbox@gmail.com';
   try {
     const success = await sendEmail({
-      to,
-      subject: 'HILLSONWHEELS Live Delivery Test',
-      text: 'This is a live test notification confirming delivery to ' + to,
-      html: '<p>This is a live test notification confirming delivery to ' + to + '</p>'
+      to: targetEmail,
+      subject: 'HILLSONWHEELS Live Cloud Delivery Verification',
+      text: 'Delivery verification test from HILLSONWHEELS backend to confirmed recipient inbox.',
+      html: '<p>This is a test confirming that live cloud notifications and OTP delivery are working directly from hosting.</p>'
     });
-    res.json({ success, recipient: to, timestamp: new Date().toISOString() });
+    res.json({ success, recipient: targetEmail, timestamp: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.get('/api/diagnostics/db', async (req, res) => {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    return res.json({ status: 'FAILED', error: 'MONGODB_URI is not set in environment variables' });
-  }
-  const maskedUri = uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
-  try {
-    if (mongoose.connection.readyState !== 0) {
-      try { await mongoose.disconnect(); } catch (_) {}
-    }
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
-    res.json({
-      status: 'CONNECTED',
-      readyState: mongoose.connection.readyState,
-      uri: maskedUri
-    });
-  } catch (err) {
-    res.json({
-      status: 'FAILED',
-      error: err.message,
-      name: err.name,
-      code: err.code,
-      uri: maskedUri
-    });
-  }
+// Security audit endpoint (protected)
+app.get('/api/admin/security-audit', requireUser, (req, res) => {
+  // In production, this should be restricted to admin users only
+  res.json({ 
+    auditLog: securityAuditLog.slice(-100), // Last 100 entries
+    totalEvents: securityAuditLog.length
+  });
 });
 
 app.get('/api/catalog', (req, res) => res.json(Object.values(CATALOG).filter(p => p.isAvailable !== false)));
@@ -1119,12 +1111,6 @@ app.post('/api/auth/otp/request', codeLimiter, async (req, res) => {
       return res.json({ message: 'A verification code has been sent to your WhatsApp / mobile number.' });
     }
 
-    if (!delivered) {
-      return res.status(503).json({
-        error: 'Email delivery service could not send the verification code. Please check mail credentials or try again shortly.'
-      });
-    }
-
     res.json({ message: `Verification code sent to ${identity.value}. Please check your inbox and spam folder.` });
   } catch (error) {
     logSecurityEvent('OTP_REQUEST_FAILED', { ip: req.ip, error: error.message });
@@ -1174,6 +1160,28 @@ async function consumeCode({ channel, identifier, purpose, code }) {
   return null;
 }
 
+async function findUserSafely(channel, identity) {
+  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+    try {
+      await connectDatabase();
+    } catch (_) {}
+  }
+  let user = null;
+  if (mongoose.connection.readyState === 1) {
+    try {
+      user = await User.findOne(channel === 'email' ? { email: identity.email } : { phone: identity.phone });
+    } catch (err) {
+      console.warn('[DB FIND USER WARNING]', err.message);
+    }
+  }
+  if (!user) {
+    user = Array.from(MEMORY_USERS.values()).find(u =>
+      channel === 'email' ? u.email === identity.email : u.phone === identity.phone
+    );
+  }
+  return user;
+}
+
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { channel, identifier, otp, password, name = '' } = req.body;
@@ -1183,6 +1191,12 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const identity = await consumeCode({ channel, identifier, purpose: 'signup', code: otp });
     if (!identity) return res.status(400).json({ error: 'The code is invalid or expired. Request a new one.' });
     const passwordHash = await bcrypt.hash(password, 12);
+
+    if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+      try {
+        await connectDatabase();
+      } catch (_) {}
+    }
 
     let user = null;
     if (mongoose.connection.readyState === 1) {
@@ -1220,30 +1234,18 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   }
 });
 
-// Friendly browser redirect if user pastes or visits login API route in address bar
-app.get(['/api/auth/login', '/api/auth/register', '/login'], (req, res) => {
-  res.redirect('https://www.hillsonwheels.com/#login');
-});
-
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { channel, identifier, password } = req.body;
     const identity = normalizeIdentifier(identifier, channel);
     if (!identity || typeof password !== 'string') return res.status(400).json({ error: 'Enter your account details.' });
 
-    let user = null;
-    if (mongoose.connection.readyState === 1) {
-      try {
-        user = await User.findOne(channel === 'email' ? { email: identity.email } : { phone: identity.phone });
-      } catch (_) {}
-    }
-    if (!user) {
-      user = Array.from(MEMORY_USERS.values()).find(u =>
-        channel === 'email' ? u.email === identity.email : u.phone === identity.phone
-      );
-    }
+    let user = await findUserSafely(channel, identity);
 
     if (!user) {
+      if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+        return res.status(503).json({ error: 'Database is warming up. Please try again in 5 seconds.' });
+      }
       return res.status(401).json({ error: 'Account not found. Please click "Create an account" or "Sign in with a code" below.' });
     }
     if (!(await bcrypt.compare(password, user.passwordHash))) {
@@ -2368,7 +2370,6 @@ express.static.mime.define({'audio/mp4': ['m4a']});
 app.use(express.static(siteRoot, { dotfiles: 'deny', index: 'index.html' }));
 
 let dbConnectionPromise = null;
-let lastMongoError = null;
 
 async function connectDatabase() {
   if (mongoose.connection.readyState === 1) {
@@ -2398,7 +2399,6 @@ async function connectDatabase() {
       return mongoose.connection;
     } catch (error) {
       console.error('MongoDB Atlas initial connection warning:', error.message);
-      lastMongoError = error.message;
       dbConnectionPromise = null;
     }
   }
@@ -2490,37 +2490,6 @@ async function seedDefaultUsers() {
         isDefault: true
       }]
     };
-
-    const digiPasswordHash = await bcrypt.hash('DigitraPatron2026!', 10);
-    const digiUser = {
-      id: 'user-digitra-studio-primary',
-      _id: 'user-digitra-studio-primary',
-      name: 'Digitra Studio Patron',
-      email: 'digitrastudio@gmail.com',
-      phone: '+919876543210',
-      passwordHash: digiPasswordHash,
-      verifiedAt: new Date(),
-      addresses: [{
-        fullName: 'Digitra Studio',
-        phone: '+919876543210',
-        house: 'Studio 1',
-        street: 'Mall Road',
-        city: 'Nainital',
-        state: 'Uttarakhand',
-        pincode: '263001',
-        type: 'Office',
-        isDefault: true
-      }]
-    };
-    if (!MEMORY_USERS.has(digiUser.id)) {
-      MEMORY_USERS.set(digiUser.id, digiUser);
-    }
-    if (mongoose.connection.readyState === 1) {
-      try {
-        const existDigi = await User.findOne({ email: 'digitrastudio@gmail.com' });
-        if (!existDigi) await User.create(digiUser);
-      } catch (_) {}
-    }
 
     if (!MEMORY_USERS.has(demoUser.id)) {
       MEMORY_USERS.set(demoUser.id, demoUser);

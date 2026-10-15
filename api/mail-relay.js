@@ -2,7 +2,6 @@
 const nodemailer = require('nodemailer');
 
 const INTERNAL_SECRET = process.env.JWT_SECRET || 'DCIgcYdtHg5Rt-sGlM2Xo3W6gXZG9_GLx0AzEX5LIXgW3Cwky6VI-MZRitWa_oi7';
-globalThis._recentDispatches = globalThis._recentDispatches || [];
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,12 +13,7 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    return res.status(200).json({
-      status: 'ok',
-      service: 'mail-relay',
-      timestamp: new Date().toISOString(),
-      recentDispatches: (globalThis._recentDispatches || []).slice(0, 20)
-    });
+    return res.status(200).json({ status: 'ok', service: 'mail-relay', timestamp: new Date().toISOString() });
   }
 
   if (req.method !== 'POST') {
@@ -47,7 +41,60 @@ module.exports = async (req, res) => {
   const user = process.env.SMTP_USER || 'howsmailbox@gmail.com';
   const pass = process.env.SMTP_PASSWORD || 'dblscnqahnphuzhj';
 
-  // 1. Try port 465 (Direct SSL/TLS)
+  // 1. Blazing fast HTTPS delivery via Resend (if configured)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const resendRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || 'HILLSONWHEELS <onboarding@resend.dev>',
+          to: [to],
+          subject,
+          html,
+          text
+        })
+      });
+      if (resendRes.ok) {
+        const data = await resendRes.json();
+        return res.status(200).json({ success: true, messageId: data.id, provider: 'resend' });
+      }
+    } catch (resendErr) {
+      console.warn('[MAIL RELAY] Resend attempt failed:', resendErr.message);
+    }
+  }
+
+  // 2. Blazing fast HTTPS delivery via Brevo (Sendinblue)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || 'howsmailbox@gmail.com';
+      const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: 'HILLSONWHEELS', email: fromAddress },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text
+        })
+      });
+      if (brevoRes.ok) {
+        const data = await brevoRes.json();
+        return res.status(200).json({ success: true, messageId: data.messageId, provider: 'brevo' });
+      }
+    } catch (brevoErr) {
+      console.warn('[MAIL RELAY] Brevo attempt failed:', brevoErr.message);
+    }
+  }
+
+  // 3. Try port 465 (Direct SSL/TLS)
   try {
     const transporter465 = nodemailer.createTransport({
       host: 'smtp.gmail.com',
@@ -61,22 +108,12 @@ module.exports = async (req, res) => {
 
     const info = await transporter465.sendMail({
       from: `"HILLSONWHEELS" <${user}>`,
-      replyTo: user,
       to,
       subject,
       html,
       text: text || subject,
       attachments: attachments || []
     });
-
-    globalThis._recentDispatches.unshift({
-      to,
-      subject,
-      port: 465,
-      messageId: info.messageId,
-      timestamp: new Date().toISOString()
-    });
-    if (globalThis._recentDispatches.length > 30) globalThis._recentDispatches.pop();
 
     return res.status(200).json({ success: true, messageId: info.messageId, port: 465 });
   } catch (err465) {
@@ -95,22 +132,12 @@ module.exports = async (req, res) => {
 
       const info = await transporter587.sendMail({
         from: `"HILLSONWHEELS" <${user}>`,
-        replyTo: user,
         to,
         subject,
         html,
         text: text || subject,
         attachments: attachments || []
       });
-
-      globalThis._recentDispatches.unshift({
-        to,
-        subject,
-        port: 587,
-        messageId: info.messageId,
-        timestamp: new Date().toISOString()
-      });
-      if (globalThis._recentDispatches.length > 30) globalThis._recentDispatches.pop();
 
       return res.status(200).json({ success: true, messageId: info.messageId, port: 587 });
     } catch (err587) {
